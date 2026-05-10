@@ -14,10 +14,8 @@ class TGParser:
         self.client = telethon.TelegramClient("news_parser", API_KEY, API_HASH)
 
     async def parse_channel(self, channel, limit=50):
-        print(f"Загружаю последние {limit} сообщений из @{channel}...")
         rows = []
         async for message in self.client.iter_messages(channel, limit=limit):
-            # Пропускаем сервисные сообщения и посты без текста
             if not message.text:
                 continue
 
