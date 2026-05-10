@@ -19,13 +19,13 @@ class TGParser:
             if not message.text:
                 continue
 
-            rows.append([
-                message.date.strftime("%Y-%m-%d %H:%M:%S"),
-                message.text.replace("\n", " "),
-                f"https://t.me/{channel}/{message.id}",
-                message.views or 0,
-                message.forwards or 0
-            ])
+            rows.append({
+                "Date": message.date.strftime("%Y-%m-%d %H:%M:%S"),
+                "Body": message.text.replace("\n", " "),
+                "Link": f"https://t.me/{channel}/{message.id}",
+                "Views": message.views or 0,
+                "Forwards": message.forwards or 0
+            })
         return rows
 
     async def __aenter__(self):
