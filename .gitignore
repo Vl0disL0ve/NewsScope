@@ -1,2 +1,6 @@
 /Parser/.env
 /Parser/news_parser.session
+/.env
+/.venv/
+/.idea/
+/backend/models/
