@@ -18,7 +18,7 @@ class TGParser:
     async def parse_channel(self, channel: str,
                             start_date: datetime = None,
                             end_date: datetime = None,
-                            limit: Optional[int] = None):
+                            limit: Optional[int] = None) -> dict:
 
         if start_date and start_date.tzinfo is None:
             start_date = start_date.replace(tzinfo=timezone.utc)
