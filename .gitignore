@@ -10,3 +10,8 @@
 /clusters.pkl
 /embeddings.pkl
 /summary_out_example.txt
+
+# Example Folders that doesnt end up in project:
+{[!}]*}
+# Example Files that doesnt end up in project:
+{[!}]*}.*

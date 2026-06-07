@@ -1,5 +1,6 @@
 import torch
 import faiss
+import gtts
 from sentence_transformers import SentenceTransformer
 
 import aiohttp
@@ -107,3 +108,20 @@ class SummaryService:
             except Exception as e:
                 return f"Ошибка: {e}"
 
+
+class TTSService:
+    def __init__(self):
+        pass
+
+    def text_to_speech(self, text: str, lang: str = "ru") -> bytes:
+        """Преобразует текст в речь и возвращает аудио в виде байтов"""
+        tts = gtts.gTTS(text=text, lang=lang)
+        audio_bytes = tts.write_to_fp()
+        return audio_bytes.getvalue()
+    
+    def save_audio(self, cluster_id: int, audio_bytes: bytes, user_dir: str) -> str:
+        """Сохраняет аудио в файл"""
+        filename = f"{user_dir}/summary_{cluster_id}.mp3"
+        with open(filename, "wb") as f:
+            f.write(audio_bytes)
+        return filename
