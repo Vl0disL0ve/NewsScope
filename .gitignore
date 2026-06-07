@@ -4,3 +4,8 @@
 /.venv/
 /.idea/
 /backend/models/
+
+# Example Folders that doesnt end up in project:
+{[!}]*}
+# Example Files that doesnt end up in project:
+{[!}]*}.*
