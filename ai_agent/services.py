@@ -1,28 +1,33 @@
 import torch
 import faiss
-import gtts
+import edge_tts
 from sentence_transformers import SentenceTransformer
 
 import aiohttp
 
 import os
-from typing import List, Dict
+import asyncio
 import numpy as np
+from typing import List, Dict
 
 
 # ───────── КОНФИГУРАЦИЯ ─────────
 EMBEDDING_MODEL = "ai-forever/FRIDA"
 EMBEDDING_MODEL_PATH = f"{os.getcwd()}/ml_models/{EMBEDDING_MODEL}"
+
 LLM_URL = "http://localhost:11434/api/chat"
 LLM_MODEL = "gemma4:12b"
 DEVICE      = "cuda" if torch.cuda.is_available() else "cpu"
 MAX_SUMMARY_TOKENS = 2048
+LLM_TOTAL_TIMEOUT = 200
+LLM_CONNECT_TIMEOUT = 30
+
+SPEAKER_VOICE = "ru-RU-DmitryNeural"
 # ────────────────────────────────
 
 class SummaryService:
-    def __init__(self, embedding_model: str, llm_model: str):
+    def __init__(self):
         self.set_embeddings_model()
-        self.llm_model = llm_model
     
     def get_embeddings(self, texts: List[str]) -> np.ndarray:
         
@@ -92,13 +97,14 @@ class SummaryService:
                 async with session.post(
                     LLM_URL,
                     json=payload,
-                    timeout=aiohttp.ClientTimeout(total=60)
+                    timeout=aiohttp.ClientTimeout(total=LLM_TOTAL_TIMEOUT,
+                                                  connect=LLM_CONNECT_TIMEOUT)
                 ) as response:
                     if response.status != 200:
                         return f"Ошибка HTTP: {response.status}"
                     
                     result = await response.json()
-                    summary = result.get("message", {}).get("content", "").strip()
+                    summary = result["message"]["content"].strip()
                     
                     if summary:
                         return summary
@@ -113,15 +119,12 @@ class TTSService:
     def __init__(self):
         pass
 
-    def text_to_speech(self, text: str, lang: str = "ru") -> bytes:
-        """Преобразует текст в речь и возвращает аудио в виде байтов"""
-        tts = gtts.gTTS(text=text, lang=lang)
-        audio_bytes = tts.write_to_fp()
-        return audio_bytes.getvalue()
-    
-    def save_audio(self, cluster_id: int, audio_bytes: bytes, user_dir: str) -> str:
-        """Сохраняет аудио в файл"""
+    async def text_to_speech(self, text: str, cluster_id: int, user_dir: str) -> str:
+        """Преобразует текст в речь, сохраняет и возвращает путь к аудио файлу"""
+        if not os.path.exists(user_dir):
+            os.makedirs(user_dir)
         filename = f"{user_dir}/summary_{cluster_id}.mp3"
-        with open(filename, "wb") as f:
-            f.write(audio_bytes)
+
+        communicate = edge_tts.Communicate(text, SPEAKER_VOICE)
+        await communicate.save(filename)
         return filename
