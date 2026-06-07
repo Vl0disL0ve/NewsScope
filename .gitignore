@@ -1,6 +1,12 @@
-/Parser/.env
-/Parser/news_parser.session
+/Parser/__pycache__/
+/news_parser.session
 /.env
 /.venv/
 /.idea/
-/backend/models/
+/.vscode/
+/ml_models/
+/backend/tests/
+/backend/__pycache__/
+/clusters.pkl
+/embeddings.pkl
+/summary_out_example.txt
