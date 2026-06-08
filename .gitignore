@@ -1,17 +1,23 @@
 /Parser/__pycache__/
+
 /news_parser.session
 /.env
 /.venv/
 /.idea/
 /.vscode/
 /ml_models/
-/backend/tests/
-/backend/__pycache__/
-/ai_agent/__pycache__/
 /audio_summaries/
 /clusters.pkl
 /embeddings.pkl
 /summary_out_example.txt
+
+/backend/tests/
+/backend/__pycache__/
+
+/ai_agent/__pycache__/
+
+/database/__pycache__/
+/database/models/__pycache__/
 
 # Example Folders that doesnt end up in project:
 {[!}]*}

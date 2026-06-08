@@ -1,10 +1,11 @@
-import os
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, DeclarativeBase
+import asyncio
+from database.init_db import init_db, test_connection
 
-DATABASE_URL = os.getenv("DATABASE_URL")
-if not DATABASE_URL:
-    raise ValueError("DATABASE_URL not set")
 
-engine = create_engine(DATABASE_URL, echo=False)
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+async def main():
+    await init_db()
+    connected = await test_connection()
+    print('connected', connected)
+
+if __name__ == '__main__':
+    asyncio.run(main())

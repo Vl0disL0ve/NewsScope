@@ -1,11 +1,19 @@
-from sqlalchemy.exc import IntegrityError, OperationalError, ProgrammingError
+import sys
+from pathlib import Path
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import select
-from fastapi import HTTPException, status
 from typing import TypeVar, Generic, Type, Optional, List
-import logging
+from datetime import datetime
 
-from models import *
+if __package__ in (None, ""):
+    project_root = Path(__file__).resolve().parent.parent
+    if str(project_root) not in sys.path:
+        sys.path.insert(0, str(project_root))
+
+try:
+    from .models import *
+except ImportError:
+    from database.models import *
 
 
 ModelType = TypeVar("ModelType", bound=Base)

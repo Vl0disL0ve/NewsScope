@@ -1,4 +1,4 @@
-# models.py
+# -*- coding: utf-8 -*-
 from sqlalchemy import (
     Text, Integer, DateTime, Numeric, ForeignKey, 
     CheckConstraint, ARRAY, text
@@ -7,7 +7,9 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from datetime import datetime
 from typing import Optional
 
-Base = DeclarativeBase
+class Base(DeclarativeBase):
+    pass
+
 
 class User(Base):
     __tablename__ = "users"
@@ -106,3 +108,6 @@ class NewsCluster(Base):
     
     cluster_id: Mapped[int] = mapped_column(ForeignKey("clusters.cluster_id", onupdate="CASCADE", ondelete="CASCADE"), primary_key=True)
     news_id: Mapped[int] = mapped_column(ForeignKey("news.news_id", onupdate="CASCADE", ondelete="CASCADE"), primary_key=True)
+
+
+__all__ = ["Base", "User", "UserSession", "EntryLog", "Cluster", "ActionLog", "News", "NewsCluster"]
