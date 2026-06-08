@@ -30,7 +30,6 @@ class SummaryService:
         self.set_embeddings_model()
     
     def get_embeddings(self, texts: List[str]) -> np.ndarray:
-        
         emb = self.embedding_model.encode(texts, normalize_embeddings=True, show_progress_bar=True)
         return emb.astype(np.float32)
     
@@ -63,7 +62,7 @@ class SummaryService:
             
         return {cid: indices for cid, indices in clusters.items() if indices}
     
-    async def summarize_with_llm(text: str) -> str:
+    async def summarize_with_llm(self, text: str) -> str:
         sys_prompt = (
             "Ты — ассистент, который кратко пересказывает тексты на русском языке."
             "Отвечай ТОЛЬКО на русском языке."
