@@ -11,14 +11,19 @@ import asyncio
 import numpy as np
 from pathlib import Path
 from typing import List, Dict, Optional
+from dotenv import load_dotenv
+
+# Загружаем .env из корня проекта (явный путь, не зависит от CWD)
+_env_path = Path(__file__).resolve().parent.parent / ".env"
+load_dotenv(_env_path, override=True)
 
 
 # ───────── КОНФИГУРАЦИЯ ─────────
 EMBEDDING_MODEL = "ai-forever/FRIDA"
 EMBEDDING_MODEL_PATH = f"{os.getcwd()}/ml_models/{EMBEDDING_MODEL}"
 
-LLM_URL = "http://localhost:11434/api/chat"
-LLM_MODEL = "gemma4:12b"
+LLM_URL = os.getenv("LLM_URL", "http://localhost:11434/api/chat")
+LLM_MODEL = os.getenv("LLM_MODEL", "gemma4:12b")
 DEVICE      = "cuda" if torch.cuda.is_available() else "cpu"
 MAX_SUMMARY_TOKENS = 2048
 LLM_TOTAL_TIMEOUT = 200
@@ -112,7 +117,9 @@ class EmbeddingCache:
 
 
 class SummaryService:
-    def __init__(self, load_embeddings: bool = True):
+    def __init__(self, load_embeddings: bool = True, llm_url: Optional[str] = None, llm_model: Optional[str] = None):
+        self.llm_url = llm_url or LLM_URL
+        self.llm_model = llm_model or LLM_MODEL
         if load_embeddings:
             self.set_embeddings_model()
             self.embedding_cache = EmbeddingCache()
@@ -182,12 +189,12 @@ class SummaryService:
             "2. Сделай краткий пересказ на русском языке (2-4 предложения).\n\n"
             "Формат ответа строго:\n"
             "topic: Название темы\n\n"
-            "Пересказ: твой пересказ здесь\n\n"
+            "Твой пересказ здесь\n\n"
             f"{text}"
         )
 
         payload = {
-            "model": LLM_MODEL,
+            "model": self.llm_model,
             "messages": [{"role": "user", "content": prompt}],
             "stream": False,
             "options": {
@@ -198,9 +205,10 @@ class SummaryService:
         }
 
         try:
+            print(f"[LLM] Пробую подключиться: {self.llm_url}, модель: {self.llm_model}")
             async with aiohttp.ClientSession() as session:
                 async with session.post(
-                    LLM_URL, json=payload,
+                    self.llm_url, json=payload,
                     timeout=aiohttp.ClientTimeout(total=LLM_TOTAL_TIMEOUT,
                                                   connect=LLM_CONNECT_TIMEOUT)
                 ) as response:
@@ -208,6 +216,7 @@ class SummaryService:
                         return ("Новости", f"Ошибка HTTP: {response.status}")
                     result = await response.json()
                     content = result.get("message", {}).get("content", "").strip()
+                    # print(content[:150] + "..." if len(content) > 150 else content)
 
                     # Парсим topic и summary
                     title = "Новости"
@@ -224,9 +233,11 @@ class SummaryService:
                             summary = stripped.split(":", 1)[1].strip()
 
                     return (title, summary if summary else content)
-        except aiohttp.ClientConnectorError:
+        except aiohttp.ClientConnectorError as e:
+            print(f"[LLM ERROR] ClientConnectorError к {self.llm_url}: {e}")
             return ("Новости", "LLM недоступен")
         except Exception as e:
+            print(f"[LLM ERROR] {type(e).__name__}: {e}")
             return ("Новости", f"Ошибка: {e}")
 
 

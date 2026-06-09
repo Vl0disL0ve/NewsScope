@@ -3,10 +3,12 @@
 /news_parser.session
 /.env
 /.venv/
+/venv/
 /.vscode/
 /.qwen/
 /ml_models/
 /data/
+/tests/
 /todo.md
 /README.AI.md
 

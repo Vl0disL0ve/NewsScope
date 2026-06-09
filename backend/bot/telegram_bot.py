@@ -261,8 +261,8 @@ class TelegramBot:
                 return
 
             try:
-                d1 = datetime.strptime(parts[0].strip(), "%d.%m.%Y %H:%M")
-                d2 = datetime.strptime(parts[1].strip(), "%d.%m.%Y %H:%M")
+                d1 = datetime.strptime(parts[0].strip(), "%d.%m.%Y %H:%M").replace(tzinfo=timezone.utc)
+                d2 = datetime.strptime(parts[1].strip(), "%d.%m.%Y %H:%M").replace(tzinfo=timezone.utc)
             except ValueError:
                 await message.answer("⚠️ Неверный формат даты.")
                 return
@@ -329,7 +329,7 @@ class TelegramBot:
                     if len(combined) >= 50:
                         try:
                             from ai_agent.services import SummaryService as SS
-                            llm = SS(load_embeddings=False)
+                            llm = SS(load_embeddings=False, llm_url=cfg.LLM_URL, llm_model=cfg.LLM_MODEL)
                             title, summary = await llm.summarize_with_llm(combined)
                         except Exception:
                             title = "Новости"

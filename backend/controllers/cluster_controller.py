@@ -15,10 +15,12 @@ from fastapi import APIRouter, HTTPException, Query, Depends
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 from datetime import datetime, timezone, timedelta
+from datetime import time as dt_time
 
 from backend.services.cluster_service import ClusterService
 from backend.services.news_service import NewsService
 from backend.deps import get_current_user
+from backend.config import LLM_URL, LLM_MODEL
 
 router = APIRouter(prefix="/api/clusters", tags=["clusters"])
 
@@ -120,7 +122,7 @@ async def summarize_cluster(
 
     try:
         from ai_agent.services import SummaryService
-        summarizer = SummaryService()
+        summarizer = SummaryService(llm_url=LLM_URL, llm_model=LLM_MODEL)
         summary = await summarizer.summarize_with_llm(combined)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Ошибка суммаризации: {e}")
@@ -474,8 +476,17 @@ async def auto_cluster(
     """
 
     # ─── Авто-парсинг выбранных каналов ──────────────────────
-    dt_from = datetime.fromisoformat(date_from) if date_from else None
-    dt_to = datetime.fromisoformat(date_to) if date_to else None
+    if date_from:
+        dt_from_date = datetime.fromisoformat(date_from).date()
+        dt_from = datetime.combine(dt_from_date, dt_time.min, tzinfo=timezone.utc)
+    else:
+        dt_from = None
+
+    if date_to:
+        dt_to_date = datetime.fromisoformat(date_to).date()
+        dt_to = datetime.combine(dt_to_date, dt_time.max, tzinfo=timezone.utc)
+    else:
+        dt_to = None
 
     channel_names = []    # названия каналов для фильтра
     if channels:
@@ -569,7 +580,7 @@ async def auto_cluster(
             summary = f"Кластер из {len(news_ids_in_cluster)} новостей."
         else:
             try:
-                llm = SummaryService(load_embeddings=False)
+                llm = SummaryService(load_embeddings=False, llm_url=LLM_URL, llm_model=LLM_MODEL)
                 cluster_title, summary = await llm.summarize_with_llm(combined)
             except Exception:
                 cluster_title = "Новости"

@@ -48,23 +48,23 @@ MIME_TYPES = {
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Действия при старте и остановке приложения."""
-    print(f"🚀 Digest AI v1.0 — запуск на {cfg.HOST}:{cfg.PORT}")
-    print(f"📦 База данных: {cfg.DATABASE_URL[:50]}...")
+    print(f"[Digest AI v1.0] Запуск на {cfg.HOST}:{cfg.PORT}")
+    print(f"[DB] {cfg.DATABASE_URL[:50]}...")
 
     from database.init_db import init_db, test_connection, engine
 
     db_ok = await test_connection(engine)
     if not db_ok:
-        print("⚠️  Не удалось подключиться к БД.")
+        print("[WARN] Не удалось подключиться к БД.")
     try:
         await init_db()
-        print("✅ Таблицы созданы/проверены")
+        print("[OK] Таблицы созданы/проверены")
 
         # Авто-seed тестовых пользователей при первом запуске
         from database.seed import seed as run_seed
         await run_seed()
     except Exception as e:
-        print(f"⚠️  Ошибка инициализации: {e}")
+        print(f"[WARN] Ошибка инициализации: {e}")
 
     # Создаём необходимые директории
     root = Path(__file__).resolve().parent.parent
@@ -101,12 +101,12 @@ async def lifespan(app: FastAPI):
                 "ALTER TABLE clusters ADD COLUMN IF NOT EXISTS cluster_title TEXT"
             ))
             await conn.commit()
-            print("✅ Триггер actions_check исправлен")
+            print("[OK] Триггер actions_check исправлен")
     except Exception as e:
-        print(f"⚠️  Не удалось исправить триггер: {e}")
+        print(f"[WARN] Не удалось исправить триггер: {e}")
 
     yield
-    print("🛑 Сервер остановлен")
+    print("[STOP] Сервер остановлен")
 
 
 app = FastAPI(
