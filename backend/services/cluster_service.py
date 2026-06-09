@@ -99,6 +99,7 @@ class ClusterService:
             return {
                 "cluster_id": cluster.cluster_id,
                 "topic": cluster.topic,
+                "cluster_title": cluster.cluster_title or cluster.topic,
                 "summary": cluster.summary,
                 "news_sources": cluster.news_sources,
                 "news_count": len(news_ids),

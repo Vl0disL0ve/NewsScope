@@ -157,16 +157,46 @@ class TelegramChannelParser:
             await self._client.disconnect()
             self._client = None
 
-    async def fetch_channel_news(self, channel_username: str, limit: int = 30) -> list[dict]:
-        """Загружает сообщения из одного канала."""
+    async def fetch_channel_news(
+        self,
+        channel_username: str,
+        limit: int = 200,
+        date_from: Optional[datetime] = None,
+        date_to: Optional[datetime] = None,
+    ) -> list[dict]:
+        """
+        Загружает сообщения из одного канала.
+        Если указаны date_from/date_to — запрашивает сообщения только в этом диапазоне.
+        """
         client = await self._get_client()
         entity = await client.get_entity(channel_username)
         messages = []
-        async for msg in client.iter_messages(entity, limit=limit):
+
+        # Параметры для iter_messages
+        kwargs = {"limit": limit}
+
+        # Если указан date_to — начинаем с него (итерируемся назад во времени)
+        if date_to:
+            kwargs["offset_date"] = date_to
+
+        async for msg in client.iter_messages(entity, **kwargs):
             if not msg.text:
                 continue
+
+            msg_date = msg.date.replace(tzinfo=timezone.utc) if msg.date else None
+            if not msg_date:
+                continue
+
+            # Если мы уже вышли за нижнюю границу диапазона — стоп
+            if date_from and msg_date < date_from:
+                break
+
+            # Если date_to задан, но сообщение новее его — пропускаем
+            if date_to and msg_date > date_to:
+                continue
+
             messages.append({
-                "published_at": msg.date.replace(tzinfo=timezone.utc) if msg.date else datetime.now(timezone.utc),
+                "published_at": msg_date,
                 "channel": channel_username.lstrip("@"),
                 "news_body": msg.text,
                 "news_link": f"https://t.me/{channel_username.lstrip('@')}/{msg.id}",
@@ -175,19 +205,26 @@ class TelegramChannelParser:
                 "views": msg.views or 0,
                 "forwarded": msg.forwards or 0,
             })
+
         return messages
 
-    async def fetch_multiple_channels(self, channels: list[str], limit: int = 30) -> list[dict]:
+    async def fetch_multiple_channels(
+        self,
+        channels: list[str],
+        limit: int = 200,
+        date_from: Optional[datetime] = None,
+        date_to: Optional[datetime] = None,
+    ) -> list[dict]:
         """Загружает новости из списка каналов последовательно (один клиент)."""
         all_news = []
         try:
             for username in channels:
                 try:
-                    news = await self.fetch_channel_news(username, limit)
+                    news = await self.fetch_channel_news(username, limit, date_from, date_to)
                     all_news.extend(news)
-                    print(f"  📱 @{username}: +{len(news)} сообщений")
+                    print(f"  [TG] @{username}: +{len(news)} сообщений")
                 except Exception as e:
-                    print(f"  ⚠️  @{username}: {e}")
+                    print(f"  [TG WARN] @{username}: {e}")
         finally:
             await self.disconnect()
         return all_news

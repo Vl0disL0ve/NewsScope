@@ -123,12 +123,12 @@ async def summarize_cluster(
     try:
         from ai_agent.services import SummaryService
         summarizer = SummaryService(llm_url=LLM_URL, llm_model=LLM_MODEL)
-        summary = await summarizer.summarize_with_llm(combined)
+        cluster_title, summary_text = await summarizer.summarize_with_llm(combined)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Ошибка суммаризации: {e}")
 
-    await service.update_cluster_summary(cluster_id, summary)
-    return {"cluster_id": cluster_id, "summary": summary}
+    await service.update_cluster_summary(cluster_id, summary_text)
+    return {"cluster_id": cluster_id, "summary": summary_text}
 
 
 @router.post("/{cluster_id}/tts")
@@ -515,7 +515,7 @@ async def auto_cluster(
         if tg_channels:
             try:
                 tg_parser = TelegramChannelParser()
-                tg_news = await tg_parser.fetch_multiple_channels(tg_channels)
+                tg_news = await tg_parser.fetch_multiple_channels(tg_channels, date_from=dt_from, date_to=dt_to)
                 await tg_parser.save_news(tg_news)
             except Exception as e:
                 print(f"  ⚠️  Telegram: {e}")
@@ -570,7 +570,7 @@ async def auto_cluster(
         # Источники — названия каналов
         channel_names = list(set(n["channel"] for n in news_items))
 
-        # Тема кластера — первые слова первой новости
+        # Тема кластера — первые слова первой новости (запасной вариант)
         topic_text = (cluster_texts[0][:80] + "...") if cluster_texts else "Новости"
 
         # Краткий пересказ и название темы (если есть текст)
@@ -582,12 +582,11 @@ async def auto_cluster(
             try:
                 llm = SummaryService(load_embeddings=False, llm_url=LLM_URL, llm_model=LLM_MODEL)
                 cluster_title, summary = await llm.summarize_with_llm(combined)
+                # Используем тему от LLM как основную
+                topic_text = cluster_title
             except Exception:
                 cluster_title = "Новости"
                 summary = f"Кластер из {len(news_ids_in_cluster)} новостей."
-
-        # Тема — короткое название от LLM или первые слова
-        topic_text = cluster_texts[0][:80] if cluster_texts else "Новости"
 
         cluster = await cluster_svc.create_cluster(
             user_id=current_user["user_id"],
