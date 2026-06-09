@@ -36,15 +36,21 @@
 
 .main-container {
   display: grid;
-  grid-template-columns: 320px 1fr;
+  grid-template-columns: 380px 1fr;
   gap: 24px;
   padding: 24px 20px;
+  max-width: 1400px;
+  margin: 0 auto;
+  height: calc(100vh - 80px);
+  overflow: hidden;
 }
 
 .sidebar {
   height: fit-content;
   position: sticky;
   top: 80px;
+  overflow-y: auto;
+  max-height: calc(100vh - 110px);
 }
 
 .sidebar h3 {
@@ -81,6 +87,59 @@
   margin: 0;
 }
 
+.channel-item label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  flex: 1;
+}
+
+.channel-source-icon {
+  font-size: 14px;
+  line-height: 1;
+}
+
+.channel-group-title {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-primary);
+  opacity: 0.5;
+  padding: 8px 0 4px 0;
+  margin-top: 4px;
+  border-top: 1px solid var(--border-light);
+}
+
+.channel-group-title:first-of-type {
+  border-top: none;
+  margin-top: 0;
+}
+
+/* Поле поиска каналов */
+.form-control {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  font-size: 13px;
+  background: var(--white);
+  color: var(--text-primary);
+  box-sizing: border-box;
+}
+
+.form-control:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+/* Выделенный кластер */
+.cluster-selected {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 .channel-actions {
   display: flex;
   gap: 8px;
@@ -98,6 +157,8 @@
 
 .content {
   min-height: 500px;
+  overflow-y: auto;
+  max-height: calc(100vh - 110px);
 }
 
 .empty-state {
@@ -153,6 +214,17 @@
 
 .cluster-collapsed .cluster-body {
   display: none;
+}
+
+.cluster-news-count {
+  font-size: 13px;
+  color: var(--text-primary);
+  margin-top: 12px;
+  padding: 8px 12px;
+  background: var(--white);
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  text-align: center;
 }
 
 .loading {

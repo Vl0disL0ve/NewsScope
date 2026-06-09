@@ -1,7 +1,6 @@
-// history.js
+// history.js — загружает историю действий пользователя (кластеры, поиск, TTS, графики, хронологии)
 
-document.addEventListener('DOMContentLoaded', function() {
-  // Проверка авторизации
+document.addEventListener('DOMContentLoaded', function () {
   const token = getToken();
   if (!token) {
     window.location.href = '/login/';
@@ -11,13 +10,11 @@ document.addEventListener('DOMContentLoaded', function() {
   const role = getRole();
   document.getElementById('userRole').textContent = role === 'ADMIN' ? 'Администратор' : 'Пользователь';
 
-  // Кнопки
   document.getElementById('logoutBtn').addEventListener('click', logout);
-  document.getElementById('backToMainBtn').addEventListener('click', function() {
+  document.getElementById('backToMainBtn').addEventListener('click', function () {
     window.location.href = '/main/';
   });
 
-  const clearHistoryBtn = document.getElementById('clearHistoryBtn');
   const historyList = document.getElementById('historyList');
   const resultModal = document.getElementById('resultModal');
   const modalBody = document.getElementById('modalBody');
@@ -27,209 +24,291 @@ document.addEventListener('DOMContentLoaded', function() {
 
   let currentResultText = '';
 
-  // Закрытие модалки
   function closeModal() {
     resultModal.classList.add('hidden');
   }
-
   closeModalBtn.addEventListener('click', closeModal);
   closeModalFooterBtn.addEventListener('click', closeModal);
-  resultModal.addEventListener('click', function(e) {
+  resultModal.addEventListener('click', function (e) {
     if (e.target === resultModal) closeModal();
   });
-
-  // Копирование текста
-  copyResultBtn.addEventListener('click', function() {
+  copyResultBtn.addEventListener('click', function () {
     if (currentResultText) {
       navigator.clipboard.writeText(currentResultText);
       showToast('Текст скопирован', 'success');
     }
   });
 
-  // Загрузка истории (МОК)
-  function loadHistory() {
-    // TODO: заменить на реальный API
-    // GET /api/history
-    
-    const mockHistory = [
-      {
-        id: 1,
-        date: '2026-06-06 14:30:00',
-        actionType: 'summary',
-        description: 'Саммари по кластерам',
-        details: 'Кластеров: 10, Каналов: 5, Период: 30.05.2026 - 06.06.2026',
-        result: {
-          clusters: [
-            { topic: 'Международные переговоры', count: 38, summary: '15 марта в Женеве прошёл очередной раунд переговоров...', sources: ['ТАСС', 'РБК'] },
-            { topic: 'Новые технологии', count: 24, summary: 'Российские компании внедряют ИИ...', sources: ['Коммерсантъ'] }
-          ]
-        }
-      },
-      {
-        id: 2,
-        date: '2026-06-05 10:15:00',
-        actionType: 'search',
-        description: 'Поиск: Иванов',
-        details: 'Найдено 3 кластера',
-        result: { query: 'Иванов', results: ['Кластер 1', 'Кластер 2'] }
-      },
-      {
-        id: 3,
-        date: '2026-06-04 09:00:00',
-        actionType: 'graph',
-        description: 'График кластеров',
-        details: 'Кластеров: 10',
-        result: { imageUrl: 'mock.png' }
-      },
-      {
-        id: 4,
-        date: '2026-06-03 18:20:00',
-        actionType: 'tts',
-        description: 'Прослушать подкаст',
-        details: 'Озвучка саммари',
-        result: { audioUrl: 'mock.mp3' }
-      },
-      {
-        id: 5,
-        date: '2026-06-02 12:00:00',
-        actionType: 'timeline',
-        description: 'Хронология: Международные переговоры',
-        details: 'Построена хронология по теме',
-        result: { events: ['Событие 1', 'Событие 2', 'Событие 3'] }
-      }
-    ];
+  function esc(str) {
+    if (!str) return '';
+    var d = document.createElement('div');
+    d.textContent = str;
+    return d.innerHTML;
+  }
 
-    renderHistory(mockHistory);
+  // ─── Загрузка истории ───────────────────────────────────────
+  async function loadHistory() {
+    historyList.innerHTML = '<div class="loading"><div class="loading-spinner"></div><p>Загрузка...</p></div>';
+
+    try {
+      // Загружаем кластеры пользователя
+      var resp = await fetch('/api/clusters/?limit=100', {
+        headers: { 'Authorization': 'Bearer ' + getToken() }
+      });
+      if (!resp.ok) throw new Error('Ошибка загрузки');
+
+      var data = await resp.json();
+      var clusters = data.clusters || [];
+
+      if (clusters.length === 0) {
+        historyList.innerHTML =
+          '<div class="empty-state">' +
+          '<p>📭 История пуста</p>' +
+          '<p style="font-size: 13px; margin-top: 8px;">Выполните действия на главной странице</p>' +
+          '</div>';
+        return;
+      }
+
+      // Строим список записей (entry): кластер + все действия с ним
+      var entries = [];
+
+      clusters.forEach(function (c) {
+        var baseDate = (c.created_at || '').replace('T', ' ').slice(0, 19);
+
+        // Основная запись — создание саммари
+        entries.push({
+          id: c.cluster_id,
+          date: baseDate,
+          actionType: 'summary',
+          actionLabel: '📊 Саммари по кластерам',
+          description: 'Тема: ' + (c.cluster_title || c.topic || '').slice(0, 60),
+          details: 'Источники: ' + (c.news_sources || []).join(', ') +
+            ' | Новостей: ' + (c.news_count || '?') +
+            ' | ' + (c.date_from || '') + ' — ' + (c.date_to || ''),
+          result: {
+            cluster_id: c.cluster_id,
+            topic: c.cluster_title || c.topic,
+            summary: c.summary,
+            sources: c.news_sources,
+            available_actions: c.available_actions || []
+          }
+        });
+
+        // Если есть аудио (TTS)
+        if (c.audio_path) {
+          entries.push({
+            id: 'audio_' + c.cluster_id,
+            date: baseDate,
+            actionType: 'tts',
+            actionLabel: '🎧 TTS по новости',
+            description: 'Озвучка: ' + (c.cluster_title || c.topic || '').slice(0, 50),
+            details: 'Аудиопересказ кластера #' + c.cluster_id,
+            result: {
+              cluster_id: c.cluster_id,
+              topic: c.cluster_title || c.topic,
+              audio_url: '/api/audio/' + c.cluster_id
+            }
+          });
+        }
+
+        // Если есть хронология
+        if (c.chronology_path) {
+          entries.push({
+            id: 'chronology_' + c.cluster_id,
+            date: baseDate,
+            actionType: 'chronology',
+            actionLabel: '📅 Хронология',
+            description: 'Хронология: ' + (c.cluster_title || c.topic || '').slice(0, 50),
+            details: 'Файл: ' + (c.chronology_path || ''),
+            result: {
+              cluster_id: c.cluster_id,
+              topic: c.cluster_title || c.topic,
+              chronology_path: c.chronology_path
+            }
+          });
+        }
+
+        // Действия из available_actions (поиск, график)
+        var actions = c.available_actions || [];
+        actions.forEach(function (action) {
+          if (action === 'search') {
+            entries.push({
+              id: 'search_' + c.cluster_id,
+              date: baseDate,
+              actionType: 'search',
+              actionLabel: '🔍 Поиск',
+              description: 'Поиск по новостям',
+              details: 'Связан с кластером #' + c.cluster_id,
+              result: {
+                cluster_id: c.cluster_id,
+                topic: c.cluster_title || c.topic,
+                summary: c.summary
+              }
+            });
+          }
+          if (action === 'plot') {
+            entries.push({
+              id: 'plot_' + c.cluster_id,
+              date: baseDate,
+              actionType: 'plot',
+              actionLabel: '📈 График кластеров',
+              description: 'График: ' + (c.cluster_title || c.topic || '').slice(0, 50),
+              details: 'Визуализация распределения',
+              result: {
+                cluster_id: c.cluster_id,
+                topic: c.cluster_title || c.topic
+              }
+            });
+          }
+        });
+      });
+
+      // Сортируем по дате (сначала новые)
+      entries.sort(function (a, b) {
+        return (b.date || '').localeCompare(a.date || '');
+      });
+
+      renderHistory(entries);
+    } catch (err) {
+      historyList.innerHTML =
+        '<div class="empty-state">' +
+        '<p>⚠️ Ошибка загрузки истории</p>' +
+        '<p style="font-size:13px;color:var(--error)">' + esc(err.message) + '</p>' +
+        '</div>';
+    }
   }
 
   function renderHistory(entries) {
-    if (!entries || entries.length === 0) {
-      historyList.innerHTML = `
-        <div class="empty-state">
-          <p>📭 История пуста</p>
-          <p style="font-size: 13px; margin-top: 8px;">Выполните действия на главной странице</p>
-        </div>
-      `;
-      return;
-    }
+    var html = '';
+    entries.forEach(function (entry) {
+      var resultJson = JSON.stringify(entry.result).replace(/'/g, '&#39;').replace(/"/g, '&quot;');
 
-    let html = '';
-    entries.forEach(function(entry) {
-      let actionIcon = '📋';
-      if (entry.actionType === 'summary') actionIcon = '📊';
-      if (entry.actionType === 'search') actionIcon = '🔍';
-      if (entry.actionType === 'graph') actionIcon = '📈';
-      if (entry.actionType === 'tts') actionIcon = '🎧';
-      if (entry.actionType === 'timeline') actionIcon = '📅';
-      
-      html += `
-        <div class="history-item" data-id="${entry.id}" data-type="${entry.actionType}" data-result='${JSON.stringify(entry.result)}'>
-          <div class="history-item-header">
-            <span class="history-date">${actionIcon} ${entry.date}</span>
-            <span class="history-badge">${entry.description}</span>
-          </div>
-          <div class="history-description">${entry.details}</div>
-        </div>
-      `;
+      html +=
+        '<div class="history-item" data-id="' + entry.id + '" data-type="' + entry.actionType + '" data-result=\'' + resultJson + '\'>' +
+        '<div class="history-item-header">' +
+        '<span class="history-date">' + esc(entry.date) + '</span>' +
+        '<span class="history-badge">' + esc(entry.actionLabel) + '</span>' +
+        '</div>' +
+        '<div class="history-description">' + esc(entry.description) + '</div>' +
+        '<div style="font-size:12px;opacity:0.6;margin-top:4px;">' + esc(entry.details) + '</div>' +
+        '</div>';
     });
-    
+
     historyList.innerHTML = html;
-    
-    // Добавляем обработчики на историю
-    document.querySelectorAll('.history-item').forEach(function(item) {
-      item.addEventListener('click', function() {
-        const actionType = this.dataset.type;
-        let result;
-        try {
-          result = JSON.parse(this.dataset.result);
-        } catch(e) {
-          result = {};
-        }
-        showResultModal(actionType, result);
+
+    // Обработчики кликов
+    document.querySelectorAll('.history-item').forEach(function (item) {
+      item.addEventListener('click', function () {
+        var result;
+        try { result = JSON.parse(this.getAttribute('data-result')); } catch (e) { result = {}; }
+        showResultModal(result, this.getAttribute('data-type') || 'summary');
       });
     });
   }
 
-  function showResultModal(actionType, result) {
-    let html = '';
+  function showResultModal(result, actionType) {
+    var html = '';
     currentResultText = '';
-    
-    switch(actionType) {
-      case 'summary':
-        if (result.clusters) {
-          result.clusters.forEach(function(cluster, idx) {
-            html += `
-              <div class="result-cluster">
-                <div class="result-cluster-title">Кластер ${idx+1}: ${cluster.topic} (${cluster.count} новостей)</div>
-                <div class="result-cluster-summary">${cluster.summary}</div>
-                <div class="result-cluster-sources">📡 Источники: ${cluster.sources.join(', ')}</div>
-              </div>
-            `;
+
+    if (actionType === 'tts' && result.audio_url) {
+      html =
+        '<div style="text-align:center;padding:20px;">' +
+        '<p>🎧 <strong>' + esc(result.topic || 'Аудиопересказ') + '</strong></p>' +
+        '<audio controls style="width:100%;margin-top:16px;">' +
+        '<source src="' + result.audio_url + '" type="audio/mpeg">' +
+        'Ваш браузер не поддерживает аудио' +
+        '</audio>' +
+        '</div>';
+      currentResultText = 'Аудиопересказ: ' + (result.topic || '');
+    } else if (actionType === 'chronology' && result.chronology_path) {
+      // Пытаемся загрузить файл хронологии
+      html =
+        '<div style="padding:20px;">' +
+        '<p>📅 <strong>' + esc(result.topic || 'Хронология') + '</strong></p>' +
+        '<p style="font-size:13px;opacity:0.6;">Файл хронологии сохранён на сервере.</p>' +
+        '<button onclick="window.location.href=\'/main/\'" class="btn btn-primary btn-sm" style="margin-top:12px;">Перейти к кластеру #' + result.cluster_id + '</button>' +
+        '</div>';
+      currentResultText = 'Хронология: ' + (result.topic || '');
+    } else if (actionType === 'plot') {
+      html =
+        '<div style="text-align:center;padding:20px;">' +
+        '<p>📈 <strong>' + esc(result.topic || 'График кластера') + '</strong></p>' +
+        '<button id="reopenPlotBtn" class="btn btn-primary" style="margin-top:12px;">Открыть график</button>' +
+        '</div>';
+      currentResultText = 'График: ' + (result.topic || '');
+      // Отложенное добавление обработчика
+      setTimeout(function () {
+        var btn = document.getElementById('reopenPlotBtn');
+        if (btn) {
+          btn.addEventListener('click', function () {
+            window.open('/api/clusters/' + result.cluster_id + '/plot', '_blank');
           });
-          currentResultText = result.clusters.map(c => `${c.topic}\n${c.summary}`).join('\n\n');
-        } else {
-          html = '<div>Нет данных для отображения</div>';
         }
-        break;
-        
-      case 'search':
-        html = `<div><strong>Поисковый запрос:</strong> ${result.query || 'не указан'}</div>
-                <div style="margin-top: 12px;"><strong>Результаты:</strong> ${(result.results || []).join(', ') || 'ничего не найдено'}</div>`;
-        currentResultText = `Запрос: ${result.query}\nРезультаты: ${(result.results || []).join(', ')}`;
-        break;
-        
-      case 'graph':
-        html = `<div class="stats-graph-placeholder" style="text-align: center; padding: 40px;">
-                  📈 <strong>График кластеров</strong><br>
-                  <div style="margin-top: 16px; padding: 20px; background: var(--bg-primary); border-radius: 8px;">
-                    [Здесь будет изображение графика]
-                  </div>
-                </div>`;
-        currentResultText = 'График кластеров (изображение)';
-        break;
-        
-      case 'tts':
-        html = `<div class="stats-graph-placeholder" style="text-align: center; padding: 40px;">
-                  🎧 <strong>Аудио озвучка</strong><br>
-                  <div style="margin-top: 16px;">
-                    <audio controls src="${result.audioUrl || ''}">
-                      Ваш браузер не поддерживает аудио
-                    </audio>
-                  </div>
-                </div>`;
-        currentResultText = 'Аудиофайл с озвучкой саммари';
-        break;
-        
-      case 'timeline':
-        if (result.events) {
-          html = '<div><strong>Хронология событий:</strong></div><ul style="margin-top: 12px; list-style: none; padding-left: 0;">';
-          result.events.forEach(function(event, idx) {
-            html += `<li style="margin-bottom: 12px; padding-left: 20px; border-left: 2px solid var(--accent);">🔹 ${event}</li>`;
+      }, 100);
+    } else if (actionType === 'search') {
+      html =
+        '<div style="padding:20px;">' +
+        '<p>🔍 <strong>Поиск по новостям</strong></p>' +
+        '<p>Связан с кластером: <strong>' + esc(result.topic || '#' + result.cluster_id) + '</strong></p>' +
+        '<button onclick="window.location.href=\'/main/\'" class="btn btn-primary btn-sm" style="margin-top:12px;">Перейти к поиску</button>' +
+        '</div>';
+      currentResultText = 'Поиск: ' + (result.topic || '');
+    } else if (result.topic) {
+      html =
+        '<div class="result-cluster">' +
+        '<div class="result-cluster-title">' + esc(result.topic) + '</div>' +
+        '<div class="result-cluster-summary" style="margin-top:12px;">' + esc(result.summary || 'Нет саммари') + '</div>' +
+        '<div class="result-cluster-sources" style="margin-top:8px;">📡 Источники: ' + esc((result.sources || []).join(', ')) + '</div>' +
+        '<button id="reRunBtn" class="btn btn-primary btn-sm" style="margin-top:12px;">🔄 Повторить с теми же параметрами</button>' +
+        '</div>';
+      currentResultText = (result.topic || '') + '\n' + (result.summary || '');
+      // Обработчик повтора
+      setTimeout(function () {
+        var btn = document.getElementById('reRunBtn');
+        if (btn) {
+          btn.addEventListener('click', function () {
+            window.location.href = '/main/';
           });
-          html += '</ul>';
-          currentResultText = result.events.join('\n');
-        } else {
-          html = '<div>Нет событий для отображения</div>';
         }
-        break;
-        
-      default:
-        html = '<div>Неизвестный тип действия</div>';
+      }, 100);
+    } else {
+      html = '<div>Нет данных</div>';
     }
-    
+
     modalBody.innerHTML = html;
     resultModal.classList.remove('hidden');
   }
 
-  // Очистка истории
-  clearHistoryBtn.addEventListener('click', function() {
-    if (confirm('Вы уверены, что хотите очистить всю историю? Действие необратимо.')) {
-      // TODO: реальный API DELETE /api/history
-      showToast('История очищена (демо-режим)', 'success');
-      loadHistory(); // Перезагружаем пустую историю
+  // ─── Очистить историю ───────────────────────────────────────
+  document.getElementById('clearHistoryBtn').addEventListener('click', function () {
+    if (!confirm('Вы уверены, что хотите удалить ВСЕ записи истории? Это действие необратимо.')) {
+      return;
     }
+
+    var btn = this;
+    btn.disabled = true;
+    btn.textContent = '⏳ Удаление...';
+
+    fetch('/api/clusters/history', {
+      method: 'DELETE',
+      headers: { 'Authorization': 'Bearer ' + getToken() }
+    })
+    .then(function (resp) {
+      if (!resp.ok) throw new Error('Ошибка');
+      return resp.json();
+    })
+    .then(function (data) {
+      showToast(data.message || 'История очищена', 'success');
+      loadHistory();
+    })
+    .catch(function (err) {
+      showToast(err.message, 'error');
+    })
+    .finally(function () {
+      btn.disabled = false;
+      btn.textContent = '🗑️ Очистить историю';
+    });
   });
 
-  // Загружаем историю при старте
   loadHistory();
 });

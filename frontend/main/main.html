@@ -34,8 +34,8 @@
 
         <div class="form-group">
           <label>Выберите каналы</label>
+          <input type="text" id="channelSearch" class="form-control" placeholder="🔍 Поиск по каналам..." style="margin-bottom: 8px;">
           <div id="channelsList" class="channels-list">
-            <!-- Список каналов загружается из API -->
             <div class="loading-text">Загрузка каналов...</div>
           </div>
           <div class="channel-actions">
@@ -51,16 +51,40 @@
         </div>
 
         <button id="saveSettingsBtn" class="btn btn-primary btn-block">Сохранить настройки</button>
-        
+
         <hr>
-        
-        <button id="generateSummaryBtn" class="btn btn-primary btn-block">📊 Сделать саммари</button>
-        <button id="listenSummaryBtn" class="btn btn-outline btn-block" disabled>🎧 Прослушать подкаст</button>
-        <button id="viewGraphBtn" class="btn btn-outline btn-block" disabled>📈 Построить график</button>
-        
+
+        <div class="form-group">
+          <label>🔍 Семантический поиск</label>
+          <div style="display:flex;gap:6px;">
+            <input type="text" id="globalSearch" class="form-control" placeholder="Поиск по смыслу..." style="flex:1;">
+            <button id="globalSearchBtn" class="btn btn-primary btn-sm">Искать</button>
+          </div>
+        </div>
+
         <hr>
-        
-        <button id="historyBtn" class="btn btn-outline btn-block">📜 История</button>
+
+        <button id="generateSummaryBtn" class="btn btn-primary btn-block">Сделать саммари</button>
+
+        <hr>
+
+        <div class="form-group">
+          <label>Telegram-канал</label>
+          <div style="display:flex;gap:6px;">
+            <input type="text" id="tgChannelInput" class="form-control" placeholder="@channel_name" style="flex:1;">
+            <button id="loadTgBtn" class="btn btn-primary btn-sm">Загрузить</button>
+          </div>
+        </div>
+
+        <button id="listenSummaryBtn" class="btn btn-outline btn-block" disabled>Сгенерировать аудио</button>
+        <button id="viewGraphBtn" class="btn btn-outline btn-block" disabled>График кластера</button>
+        <button id="viewAllGraphBtn" class="btn btn-outline btn-block">Карта всех кластеров</button>
+        <button id="buildChronologyBtn" class="btn btn-outline btn-block" disabled>Хронология</button>
+
+        <hr>
+
+        <button id="historyBtn" class="btn btn-outline btn-block">История</button>
+        <button id="adminLink" class="btn btn-outline btn-block hidden">Админ-панель</button>
       </aside>
 
       <!-- Основной контент - результаты -->
@@ -74,7 +98,5 @@
     </div>
   </div>
 
-  <script src="../common/common.js"></script>
-  <script src="main.js"></script>
-</body>
-</html>
+  <script src="../common/common.js?v=26"></script>
+  <script src="main.js?v=26"></script>

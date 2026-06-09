@@ -48,12 +48,12 @@ class EntryLog(Base):
     entry_id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.user_id", onupdate="CASCADE", ondelete="CASCADE"), nullable=False)
     visit_time: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text("now()"))
-    entry_source: Mapped[str] = mapped_column(Text, nullable=False)
+    entry_source: Mapped[str] = mapped_column("source", Text, nullable=False)
 
     user: Mapped["User"] = relationship(back_populates="entry_logs")
 
     __table_args__ = (
-        CheckConstraint("entry_source IN ('web', 'tg')", name="source_check"),
+        CheckConstraint("source IN ('web', 'tg')", name="source_check"),
     )
 
 class Cluster(Base):
@@ -62,6 +62,7 @@ class Cluster(Base):
     cluster_id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.user_id", onupdate="CASCADE", ondelete="CASCADE"), nullable=False)
     topic: Mapped[str] = mapped_column(Text, nullable=False)
+    cluster_title: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     summary: Mapped[str] = mapped_column(Text, nullable=False)
     audio_path: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     plot_path: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
@@ -94,12 +95,12 @@ class News(Base):
     views: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
     forwarded: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
     subject: Mapped[Optional[str]] = mapped_column("subject", Text, nullable=True)
-    news_source: Mapped[str] = mapped_column(Text, nullable=False)
+    news_source: Mapped[str] = mapped_column("source", Text, nullable=False)
 
     clusters: Mapped[list["Cluster"]] = relationship(secondary="news_clusters", back_populates="news_items")
 
     __table_args__ = (
-        CheckConstraint("news_source IN ('tg', 'lenta')", name="news_source_check"),
+        CheckConstraint("source IN ('tg', 'lenta')", name="news_source_check"),
     )
 
 class NewsCluster(Base):

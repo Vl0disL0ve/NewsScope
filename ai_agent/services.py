@@ -4,11 +4,13 @@ import edge_tts
 from sentence_transformers import SentenceTransformer
 
 import aiohttp
-
+import hashlib
+import pickle
 import os
 import asyncio
 import numpy as np
-from typing import List, Dict
+from pathlib import Path
+from typing import List, Dict, Optional
 
 
 # ───────── КОНФИГУРАЦИЯ ─────────
@@ -23,15 +25,110 @@ LLM_TOTAL_TIMEOUT = 200
 LLM_CONNECT_TIMEOUT = 30
 
 SPEAKER_VOICE = "ru-RU-DmitryNeural"
+
+# Путь для кэша эмбеддингов
+CACHE_DIR = Path(os.getcwd()) / "data" / "embeddings"
+CACHE_FILE = CACHE_DIR / "embeddings_cache.pkl"
 # ────────────────────────────────
 
+
+class EmbeddingCache:
+    """
+    Кэш эмбеддингов на диске (pickle).
+    Ключ — SHA256 от текста, значение — эмбеддинг (np.ndarray).
+    """
+
+    def __init__(self, cache_path: Path = CACHE_FILE):
+        self.cache_path = cache_path
+        self.cache_path.parent.mkdir(parents=True, exist_ok=True)
+        self._cache: Dict[str, np.ndarray] = {}
+        self._dirty = False
+        self._load()
+
+    def _hash(self, text: str) -> str:
+        return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+    def _load(self):
+        if self.cache_path.exists():
+            try:
+                with open(self.cache_path, "rb") as f:
+                    self._cache = pickle.load(f)
+                print(f"  📦 Загружено {len(self._cache)} эмбеддингов из кэша")
+            except Exception:
+                self._cache = {}
+
+    def save(self):
+        if self._dirty:
+            try:
+                with open(self.cache_path, "wb") as f:
+                    pickle.dump(self._cache, f)
+                print(f"  💾 Сохранено {len(self._cache)} эмбеддингов в кэш")
+                self._dirty = False
+            except Exception as e:
+                print(f"  ⚠️  Ошибка сохранения кэша эмбеддингов: {e}")
+
+    def get(self, text: str) -> Optional[np.ndarray]:
+        h = self._hash(text)
+        return self._cache.get(h)
+
+    def set(self, text: str, embedding: np.ndarray):
+        h = self._hash(text)
+        self._cache[h] = embedding
+        self._dirty = True
+
+    def get_or_compute(self, texts: List[str], compute_fn) -> np.ndarray:
+        """
+        Для списка текстов: проверяет кэш, для новых — вызывает compute_fn.
+        compute_fn(texts_to_compute) -> np.ndarray эмбеддингов.
+        Возвращает матрицу эмбеддингов для всех текстов.
+        """
+        n = len(texts)
+        if n == 0:
+            return np.array([], dtype=np.float32)
+
+        # Определяем, какие тексты есть в кэше, а какие нужно вычислить
+        indices_to_compute = []
+        texts_to_compute = []
+        results = [None] * n
+
+        for i, text in enumerate(texts):
+            cached = self.get(text)
+            if cached is not None:
+                results[i] = cached
+            else:
+                indices_to_compute.append(i)
+                texts_to_compute.append(text)
+
+        # Вычисляем новые эмбеддинги
+        if texts_to_compute:
+            print(f"  🧮 Вычисляю эмбеддинги для {len(texts_to_compute)} текстов...")
+            computed = compute_fn(texts_to_compute)  # (m, dim)
+            for idx, emb in zip(indices_to_compute, computed):
+                results[idx] = emb
+                self.set(texts[idx], emb)
+            self.save()
+
+        return np.array(results, dtype=np.float32)
+
+
 class SummaryService:
-    def __init__(self):
-        self.set_embeddings_model()
-    
+    def __init__(self, load_embeddings: bool = True):
+        if load_embeddings:
+            self.set_embeddings_model()
+            self.embedding_cache = EmbeddingCache()
+        else:
+            self.embedding_model = None
+            self.embedding_cache = None
+
     def get_embeddings(self, texts: List[str]) -> np.ndarray:
-        emb = self.embedding_model.encode(texts, normalize_embeddings=True, show_progress_bar=True)
-        return emb.astype(np.float32)
+        if self.embedding_model is None:
+            raise RuntimeError("Embedding model not loaded (use load_embeddings=True)")
+        def _compute(texts_chunk):
+            emb = self.embedding_model.encode(
+                texts_chunk, normalize_embeddings=True, show_progress_bar=True
+            )
+            return emb.astype(np.float32)
+        return self.embedding_cache.get_or_compute(texts, _compute)
     
     def set_embeddings_model(self):
         if not os.path.exists(EMBEDDING_MODEL_PATH):
@@ -42,14 +139,20 @@ class SummaryService:
     
     def cluster_with_faiss(self, embeddings: np.ndarray, k: int) -> Dict[int, List[int]]:
         """Группирует векторы через FAISS k-means, возвращает {cluster_id: [idx_news, ...]}"""
+        n_points = embeddings.shape[0]
         d = embeddings.shape[1]
-        
+
+        # Если точек меньше чем k, уменьшаем k
+        k = min(k, max(2, n_points - 1))
+
+        # FAISS по умолчанию требует 39 точек на центроид — уменьшаем
         kmeans = faiss.Clustering(d, k)
         kmeans.niter = 20
         kmeans.verbose = False
         kmeans.seed = 42
+        kmeans.min_points_per_centroid = 2
         kmeans.max_points_per_centroid = 1000000
-        
+
         index = faiss.IndexFlatIP(d)
         faiss.normalize_L2(embeddings)
         kmeans.train(embeddings, index)
@@ -61,57 +164,70 @@ class SummaryService:
             clusters[cluster_id].append(idx)
             
         return {cid: indices for cid, indices in clusters.items() if indices}
-    
-    async def summarize_with_llm(self, text: str) -> str:
-        sys_prompt = (
-            "Ты — ассистент, который кратко пересказывает тексты на русском языке."
-            "Отвечай ТОЛЬКО на русском языке."
-            "Ответ должен быть из 2-4 предложений, только пересказ, без лишних слов."
+
+    async def summarize_with_llm(self, text: str):
+        """
+        Возвращает кортеж (title, summary).
+        title — краткое название темы (2-5 слов),
+        summary — краткий пересказ.
+        """
+        if not text or len(text.strip()) < 50:
+            return ("Новости", "Недостаточно текста для анализа.")
+
+        text = text.strip()[:3000]
+
+        prompt = (
+            "Прочитай следующие новости и выполни две задачи:\n"
+            "1. Придумай краткое название темы (2-5 слов), которое объединяет эти новости.\n"
+            "2. Сделай краткий пересказ на русском языке (2-4 предложения).\n\n"
+            "Формат ответа строго:\n"
+            "topic: Название темы\n\n"
+            "Пересказ: твой пересказ здесь\n\n"
+            f"{text}"
         )
-        
+
         payload = {
             "model": LLM_MODEL,
-            "messages": [
-                {
-                    "role": "system",
-                    "content": sys_prompt
-                },
-                {
-                    "role": "user",
-                    "content": f"Кратко перескажи этот текст, сохрани главную мысль:\n\n{text}"
-                }
-            ],
+            "messages": [{"role": "user", "content": prompt}],
             "stream": False,
             "options": {
                 "num_predict": MAX_SUMMARY_TOKENS,
-                "temperature": 1.0,
-                "top_p": 0.95,
-                "top_k": 64,
-                "think": True
+                "temperature": 0.7,
+                "top_p": 0.9,
             }
         }
-        
-        async with aiohttp.ClientSession() as session:
-            try:
+
+        try:
+            async with aiohttp.ClientSession() as session:
                 async with session.post(
-                    LLM_URL,
-                    json=payload,
+                    LLM_URL, json=payload,
                     timeout=aiohttp.ClientTimeout(total=LLM_TOTAL_TIMEOUT,
                                                   connect=LLM_CONNECT_TIMEOUT)
                 ) as response:
                     if response.status != 200:
-                        return f"Ошибка HTTP: {response.status}"
-                    
+                        return ("Новости", f"Ошибка HTTP: {response.status}")
                     result = await response.json()
-                    summary = result["message"]["content"].strip()
-                    
-                    if summary:
-                        return summary
-                    else:
-                        return "Ошибка: Пустой ответ от модели"
-                        
-            except Exception as e:
-                return f"Ошибка: {e}"
+                    content = result.get("message", {}).get("content", "").strip()
+
+                    # Парсим topic и summary
+                    title = "Новости"
+                    summary = content
+                    lines = content.split("\n")
+                    for i, line in enumerate(lines):
+                        stripped = line.strip()
+                        if stripped.lower().startswith("topic:"):
+                            title = stripped.split(":", 1)[1].strip()
+                            rest = [ln for ln in lines[i+1:] if ln.strip()]
+                            summary = "\n".join(rest).strip()
+                            break
+                        elif stripped.lower().startswith("пересказ:"):
+                            summary = stripped.split(":", 1)[1].strip()
+
+                    return (title, summary if summary else content)
+        except aiohttp.ClientConnectorError:
+            return ("Новости", "LLM недоступен")
+        except Exception as e:
+            return ("Новости", f"Ошибка: {e}")
 
 
 class TTSService:

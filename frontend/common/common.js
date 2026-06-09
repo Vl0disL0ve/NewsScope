@@ -4,7 +4,7 @@ const API_BASE = '/api';
 
 function showToast(message, type = 'error') {
     const toast = document.createElement('div');
-    toast.className = 'toast toast-${type}';
+    toast.className = `toast toast-${type}`;
     toast.textContent = message;
     document.body.appendChild(toast);
     setTimeout(() => toast.remove(), 3000);
@@ -18,7 +18,7 @@ function getToken() {
 }
 
 function saveRole(role) {
-    localStorage.setItem('role', role);
+    localStorage.setItem('role', role ? role.toUpperCase() : '');
 }
 
 function getRole() {

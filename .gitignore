@@ -1,22 +1,22 @@
 /__pycache__/
 
-/Parser/__pycache__/
-
 /news_parser.session
 /.env
 /.venv/
-/.idea/
 /.vscode/
+/.qwen/
 /ml_models/
-/audio_summaries/
-/clusters.pkl
-/embeddings.pkl
-/summary_out_example.txt
-
-/backend/tests/
-/backend/__pycache__/
+/data/
+/todo.md
+/README.AI.md
 
 /ai_agent/__pycache__/
+/backend/__pycache__/
+/backend/controllers/__pycache__/
+/backend/services/__pycache__/
+/database/__pacache__/
+/database/models/__pacache__/
+/Parser/__pycache__/
 
 /database/__pycache__/
 /database/models/__pycache__/
