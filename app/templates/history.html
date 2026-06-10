@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>История - Аналитика новостей</title>
+  <link rel="stylesheet" href="/static/common/common.css">
+  <link rel="stylesheet" href="/static/history/history.css">
+</head>
+<body>
+  <div class="app">
+    <!-- Шапка -->
+    <header class="header">
+      <div class="container header-container">
+        <h1 class="logo">📰 Аналитика новостей</h1>
+        <div class="header-right">
+          <span id="userRole" class="role-badge"></span>
+          <button id="backToMainBtn" class="btn btn-outline">← На главную</button>
+          <button id="logoutBtn" class="btn btn-outline">Выйти</button>
+        </div>
+      </div>
+    </header>
+
+    <div class="container main-container">
+      <div class="history-header">
+        <h1 class="page-title">📜 История действий</h1>
+        <button id="clearHistoryBtn" class="btn btn-danger">🗑️ Очистить историю</button>
+      </div>
+
+      <!-- Блок с историей -->
+      <div class="history-content card">
+        <div id="historyList" class="history-list">
+          <div class="empty-state">
+            <p>📭 История пуста</p>
+            <p style="font-size: 13px; margin-top: 8px;">Выполните действия на главной странице</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Модальное окно для просмотра результата -->
+      <div id="resultModal" class="modal hidden">
+        <div class="modal-content card">
+          <div class="modal-header">
+            <h3>Детали действия</h3>
+            <button id="closeModalBtn" class="modal-close">&times;</button>
+          </div>
+          <div id="modalBody" class="modal-body">
+            <!-- Сюда загружается результат -->
+          </div>
+          <div class="modal-footer">
+            <button id="copyResultBtn" class="btn btn-outline btn-sm">📋 Копировать текст</button>
+            <button id="closeModalFooterBtn" class="btn btn-primary btn-sm">Закрыть</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/common/common.js?v=3"></script>
+  <script src="/static/history/history.js?v=3"></script>

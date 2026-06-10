@@ -1,200 +1,199 @@
-# NewsScope
+# News Aggregator — проект за ночь
 
-Курсовой проект по ООП. Агрегатор новостей с суммаризацией и категоризацией.
+## ✅ Прогресс (отмечать по мере готовности)
 
----
+### База данных (SQLite)
+- [X] Модели User, UserSettings, News, Cluster, NewsCluster, UserHistory, EntryLog
+- [X] Асинхронный CRUD (классы UserCRUD, SettingsCRUD, NewsCRUD, ClusterCRUD, HistoryCRUD, StatsCRUD)
+- [X] Инициализация БД (init_db.py)
+- [X] Создание первого админа с автоматическим паролем
 
-## Авторы
+### Бэкенд (FastAPI)
+- [X] main.py + CORS настроен
+- [X] Health check эндпоинт (/api/health)
+- [X] AuthService (логин, роли, блокировка после 5 попыток) — через werkzeug
+- [X] API эндпоинты:
+  - [X] POST /api/auth/login
+  - [X] POST /api/auth/register
+  - [X] POST /api/auth/login/tg
+  - [X] GET /api/auth/settings
+  - [X] POST /api/auth/settings
+  - [X] GET /api/news/sources
+  - [X] POST /api/parser/tg
+  - [X] POST /api/clusters/run/{user_id}
+  - [X] POST /api/clusters/cluster (для фронта)
+  - [X] GET /api/clusters/results/{user_id}
+  - [X] GET /api/clusters/
+  - [X] GET /api/clusters/search
+  - [X] DELETE /api/clusters/history
+  - [X] POST /api/clusters/{cluster_id}/tts
+  - [X] POST /api/clusters/{cluster_id}/plot
+  - [X] POST /api/clusters/{cluster_id}/chronology
+  - [X] POST /api/clusters/plot
+  - [X] GET /api/admin/stats/database
+  - [X] GET /api/admin/stats/visits
+  - [X] GET /api/admin/stats/users
+  - [X] GET /api/admin/users/search
+- [X] ParserService
+  - [X] TelegramParser (работает через Telethon, нужны API ключи)
+  - [ ] LentaParser (НЕ РАБОТАЕТ — требует доработки селекторов)
+  - [X] Сохранение только новых новостей
+- [X] AIService (SentenceTransformer + кластеризация через sklearn)
+- [ ] LLMService (требуется Ollama)
+- [X] TTSService (edge_tts)
+- [ ] StatsService (графики matplotlib в разработке)
 
-| ФИО | Модули |
-|-----|--------|
-| **Ряжапов Даниил Ринатович** | `parser` (базовый парсер, RSS-парсер, веб-скрапер, менеджер парсеров), `ai_agent` (суммаризатор, промпты, клиент LLM) |
-| **Арямнов Владислав Андреевич** | `frontend` (админка, история, логин, главная, общие компоненты), `telegram_bot` (бот, хендлеры, клавиатуры, middleware) |
-| **Общие модули** | `database` (сессия БД, модели, репозитории), `backend` (API, сервисы, ядро, фоновые задачи, middleware) — разрабатываются совместно |
+### Web интерфейс (HTML/CSS/JS)
+- [X] Страница логина (/login)
+- [X] Дашборд (/main)
+- [X] История (/history)
+- [X] Админ-панель (/admin)
+- [X] Настройки (количество кластеров, выбор каналов, период)
+- [X] Семантический поиск
+- [X] Просмотр саммари кластеров
+- [ ] TTS плеер (кнопка есть, требуется интеграция)
+- [ ] График кластеров (кнопка есть, заглушка)
+- [ ] Хронология (кнопка есть, заглушка)
 
-## Структура проекта
+### Telegram бот (aiogram 3.x)
+- [ ] Команда /start (логин)
+- [ ] Выбор каналов, количества кластеров
+- [ ] Запуск саммари
+- [ ] Прослушать подкаст
+- [ ] История, хронология
+- [ ] Админ-команды
 
-- **backend** — основной контроллер приложения
-  - принимает запросы от пользователей через фронтенд и Telegram-бота
-  - управляет работой парсера и взаимодействием с базой данных
-  - содержит бизнес-логику суммаризации, категоризации и обработки новостей
-  - `main.py` — точка входа для запуска веб-сервера (FastAPI/Uvicorn)
-  - `core/`
-    - `config.py` — все настройки приложения: секреты, URL базы данных, ключи API
-    - `orchestrator.py` — главный дирижёр процессов: запуск парсинга → суммаризация → сохранение → уведомление
-    - `scheduler.py` — планировщик фоновых задач по расписанию (cron-правила)
-    - `dependencies.py` — внедрение зависимостей FastAPI (получение сессии БД, сервисов)
-  - `api/`
-    - `router.py` — сборка всех эндпоинтов в единый API-роутер
-    - `endpoints/`
-      - `news.py` — получение списка новостей и конкретной новости по ID
-      - `summary.py` — получение последней сводки и запуск генерации новой
-      - `auth.py` — аутентификация (логин, пароль, JWT-токены)
-      - `sources.py` — управление источниками новостей (добавить, удалить, список)
-      - `health.py` — проверка живости сервиса для мониторинга
-    - `schemas/`
-      - `news.py` — Pydantic-схемы: формат ответа со списком новостей
-      - `summary.py` — схемы запроса на генерацию и ответа со сводкой
-      - `auth.py` — схемы для логина и токенов
-      - `common.py` — общие схемы: пагинация, статус-сообщения, ошибки
-    - `middleware/`
-      - `auth_middleware.py` — проверка JWT-токена перед запросом
-      - `cors_middleware.py` — правила CORS для доступа веб-фронтенда
-      - `logging_middleware.py` — логирование всех входящих HTTP-запросов
-  - `services/`
-    - `news_service.py` — бизнес-логика фильтрации, пагинации и поиска новостей
-    - `summary_service.py` — управление процессом суммаризации (получить текст → отправить в ai_agent → сохранить)
-    - `source_service.py` — CRUD-операции для источников новостей
-    - `notification_service.py` — рассылка уведомлений (дёргает Telegram-бота, почту)
-  - `tasks/`
-    - `worker.py` — настройка фонового воркера (Celery / ARQ)
-    - `parsing_task.py` — фоновая задача «запустить парсер для источника X»
-    - `summary_task.py` — фоновая задача «сгенерировать сводку за сегодня»
-  - `utils/`
-    - `logger.py` — единый логгер для всего приложения
-    - `exceptions.py` — кастомные исключения (новость не найдена, ошибка ИИ-сервиса)
+### Интеграция
+- [X] Сессии через localStorage (web)
+- [X] Сохранение истории пользователя
+- [ ] Пользовательские папки data/users/user_{id}/
 
-- **frontend** — веб-сайт агрегатора
-  - отображает ленту новостей, категории, графики кластеров
-  - взаимодействует с backend через API
-  - `admin/` — админ-панель управления
-    - `admin.html`, `admin.css`, `admin.js`
-  - `common/` — общие ресурсы для всех страниц
-    - `common.css`, `common.js`
-    - `components/` — переиспользуемые UI-компоненты (карточка новости, кнопка)
-  - `history/` — страница истории новостей
-    - `history.html`, `history.css`, `history.js`
-  - `login/` — страница входа в систему
-    - `login.html`, `login.css`, `login.js`
-  - `main/` — главная страница с лентой и дайджестом
-    - `main.html`, `main.css`, `main.js`
-  - `static/` — скомпилированные или внешние статические файлы
+### Деплой и демо
+- [X] README по запуску
+- [ ] Видео работы (скринкаст)
+- [ ] Презентация (5-7 слайдов)
 
-- **telegram_bot** — интерфейс доступа через Telegram
-  - принимает команды и отправляет новости, сводки, озвучку
-  - обращается к backend за данными
-  - `bot.py` — главный файл бота: инициализация, диспетчер, запуск поллинга
-  - `handlers/`
-    - `start.py` — обработчик команды /start
-    - `latest.py` — обработчик команды /latest (последний дайджест)
-    - `subscribe.py` — обработчик команды /subscribe (подписка на рассылку)
-  - `keyboards/`
-    - `main_menu.py` — клавиатуры с кнопками главного меню
-  - `middlewares/`
-    - `logging.py` — логирование входящих сообщений от пользователей
+## 🚨 ТЕКУЩИЕ НЕДОЧЁТЫ (TODO)
 
-- **parser** — сборщик новостей из внешних источников
-  - парсер внешних сайтов
-  - парсер Telegram-каналов
-  - `base_parser.py` — абстрактный класс парсера с общим интерфейсом
-  - `rss_parser.py` — парсер RSS-лент (XML → список новостей)
-  - `web_scraper.py` — парсер HTML-страниц (Playwright / BeautifulSoup)
-  - `parser_manager.py` — управление запуском всех парсеров по расписанию
-  - `test.py` — тесты парсера на контрольных URL
+### Критические (без них не работает основной функционал)
+1. **Нет новостей в БД** — парсеры не запускаются автоматически. Нужно вручную нажать кнопку "Загрузить" для Telegram или Lenta на странице /main
+2. **LentaParser не работает** — селекторы устарели. Нужно обновить CSS классы в lenta_parser.py
+3. **TelegramParser требует авторизации** — при первом запуске нужно ввести номер телефона и код в консоли
 
-- **database** — хранение данных
-  - новости, категории, кластеры, хронология, аудиофайлы озвучки
-  - `session.py` — настройка подключения к БД (engine, SessionLocal)
-  - `models.py` — ORM-модели таблиц (News, Summary, User, Source)
-  - `repository/`
-    - `base.py` — базовый репозиторий с общими CRUD-операциями
-    - `news_repo.py` — специфические запросы к таблице новостей
+### Средней важности
+4. **API эндпоинт /api/clusters/cluster** добавлен, но фронт ожидает его с параметрами — работает
+5. **Статистика пользователей /api/admin/stats/users** — эндпоинт добавлен
+6. **TTS работает, но файлы не проигрываются** — нужно проверить путь к audio_url
 
-- **ai_agent** — модуль искусственного интеллекта для обработки контента
-  - `summarizer.py` — основная логика суммаризации: приём текста → формирование промпта → вызов LLM → возврат сжатого текста
-  - `prompts.py` — шаблоны промптов для разных задач (суммаризация, выделение ключевых тем, категоризация)
-  - `llm_client.py` — клиент для общения с API языковых моделей (OpenAI, Anthropic, локальная LLM)
+### Низкой важности (косметика)
+7. **Графики кластеров** — пока заглушки (HTML страницы)
+8. **Хронология** — пока заглушка
+9. **Ollama LLM** — не установлен, кластеризация работает без него
 
-## Чеклист текущих фич
-- [x] Completed
-- [ ] In Progress
+## 🧪 Тестирование
 
-- [ ] Реализация backend
-  - [ ] main.py
-  - [ ] core
-    - [ ] config.py
-    - [ ] orchestrator.py
-    - [ ] scheduler.py
-    - [ ] dependencies.py
-  - [ ] api
-    - [ ] router.py
-    - [ ] endpoints
-      - [ ] news.py
-      - [ ] summary.py
-      - [ ] auth.py
-      - [ ] sources.py
-      - [ ] health.py
-    - [ ] schemas
-      - [ ] news.py
-      - [ ] summary.py
-      - [ ] auth.py
-      - [ ] common.py
-    - [ ] middleware
-      - [ ] auth_middleware.py
-      - [ ] cors_middleware.py
-      - [ ] logging_middleware.py
-  - [ ] services
-    - [ ] news_service.py
-    - [ ] summary_service.py
-    - [ ] source_service.py
-    - [ ] notification_service.py
-  - [ ] tasks
-    - [ ] worker.py
-    - [ ] parsing_task.py
-    - [ ] summary_task.py
-  - [ ] utils
-    - [ ] logger.py
-    - [ ] exceptions.py
+### Запуск всех тестов:
+python tests/run_tests.py
 
-- [ ] Реализация frontend
-  - [ ] admin
-    - [ ] admin.html
-    - [ ] admin.css
-    - [ ] admin.js
-  - [ ] common
-    - [ ] common.css
-    - [ ] common.js
-    - [ ] components
-  - [ ] history
-    - [ ] history.html
-    - [ ] history.css
-    - [ ] history.js
-  - [ ] login
-    - [ ] login.html
-    - [ ] login.css
-    - [ ] login.js
-  - [ ] main
-    - [ ] main.html
-    - [ ] main.css
-    - [ ] main.js
-  - [ ] static
+### Отдельные тесты:
+python tests/run_tests.py crud       # CRUD операции
+python tests/run_tests.py parser     # Парсеры новостей
+python tests/run_tests.py clustering # Кластеризация
 
-- [ ] Реализация telegram_bot
-  - [ ] bot.py
-  - [ ] handlers
-    - [ ] start.py
-    - [ ] latest.py
-    - [ ] subscribe.py
-  - [ ] keyboards
-    - [ ] main_menu.py
-  - [ ] middlewares
-    - [ ] logging.py
+### Структура тестов:
+tests/
+├── test_crud.py       # Тестирование БД и CRUD операций
+├── test_parser.py     # Тестирование парсеров (Lenta, Telegram)
+├── test_clustering.py # Тестирование AI кластеризации
+└── run_tests.py       # Единый запускатор
 
-- [ ] Реализация parser
-  - [ ] base_parser.py
-  - [ ] rss_parser.py
-  - [ ] web_scraper.py
-  - [ ] parser_manager.py
-  - [ ] test.py
+### Текущий статус (2026-06-10):
+| Компонент | Статус |
+|-----------|--------|
+| База данных (SQLite) | ✅ Работает |
+| CRUD операции | ✅ Работает |
+| Парсер Telegram | ✅ Работает (после авторизации) |
+| Парсер Lenta.ru | ❌ Требует доработки селекторов |
+| Эмбеддинги (SentenceTransformer) | ✅ Работает |
+| Кластеризация (sklearn) | ✅ Работает |
+| LLM (Ollama) | ❌ Не установлен (опционально) |
+| API сервер | ✅ Работает на :8000 |
+| Web интерфейс | ✅ Работает (кроме TTS/графиков) |
+| Тест CRUD | ✅ Пройден |
+| Тест парсера | ⚠️ Telegram OK, Lenta нет |
+| Тест кластеризации | ✅ Пройден |
 
-- [ ] Реализация database
-  - [ ] session.py
-  - [ ] models.py
-  - [ ] repository
-    - [ ] base.py
-    - [ ] news_repo.py
+## 🚀 Запуск проекта
 
-- [ ] Реализация ai_agent
-  - [ ] summarizer.py
-  - [ ] prompts.py
-  - [ ] llm_client.py
+### 1. Установка зависимостей:
+pip install -r requirements.txt
+
+### 2. Настройка .env:
+Скопируй .env.example в .env и заполни:
+- TG_API_ID, TG_API_HASH (для Telegram парсера)
+- BOT_TOKEN (для Telegram бота, опционально)
+
+### 3. Инициализация БД и создание админа:
+python -m app.database.init_db
+# Логин: admin, Пароль: As612aj$
+
+### 4. Запуск API сервера:
+python -m app.main
+# Открыть http://localhost:8000/login
+
+### 5. Первый вход (важно!):
+- Авторизуйся как admin
+- На странице /main выбери каналы
+- Нажми "Загрузить" для Telegram (потребуется авторизация в консоли)
+- ИЛИ нажми "Сделать саммари" если новости уже есть
+
+### 6. Запуск тестов:
+python tests/run_tests.py
+
+## 📁 Структура проекта
+news_aggregator/
+├── app/
+│   ├── api/               # API роутеры (web, telegram)
+│   │   └── web/           # Web эндпоинты (auth, clusters, news, admin, parser)
+│   ├── database/          # Сессии и CRUD
+│   ├── models/            # SQLAlchemy модели
+│   ├── services/          # Бизнес-логика
+│   │   ├── parser/        # Парсеры новостей (lenta, telegram)
+│   │   ├── ai_service.py  # Эмбеддинги и кластеризация
+│   │   ├── auth_service.py
+│   │   ├── cluster_service.py
+│   │   ├── parser_service.py
+│   │   └── tts_service.py
+│   ├── static/            # CSS/JS (common, login, main, history, admin)
+│   ├── templates/         # HTML (login, main, history, admin, index)
+│   ├── config.py
+│   └── main.py            # FastAPI приложение
+├── tests/                 # Тесты
+├── data/                  # БД (news.db) и пользовательские файлы
+├── ml_models/             # Кэш моделей AI (SentenceTransformer)
+└── requirements.txt
+
+## 🔧 Как исправить недочёты
+
+### 1. Загрузить новости (срочно):
+- Открыть http://localhost:8000/main
+- Выбрать каналы (например, ТАСС, РБК)
+- Нажать кнопку "Загрузить" под полем "Telegram-канал"
+- Дождаться авторизации в консоли (ввести номер телефона и код)
+
+### 2. Починить Lenta.ru:
+- Открыть lenta.ru в браузере
+- Найти актуальные CSS классы для статей
+- Заменить в app/services/parser/lenta_parser.py селекторы
+
+### 3. Запустить кластеризацию:
+- После загрузки новостей нажать "Сделать саммари"
+- Выбрать период и количество кластеров
+- Дождаться результата
+
+## 📝 Примечания
+
+- Для работы Telegram парсера нужны API ключи от my.telegram.org
+- При первом запуске Telegram парсера потребуется авторизация в консоли
+- Эмбеддинги работают на CPU, модель ~470 MB (скачивается автоматически)
+- Для работы TTS нужен интернет (edge_tts использует Azure)
