@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Админ-панель - Аналитика новостей</title>
+  <link rel="stylesheet" href="/static/common/common.css">
+  <link rel="stylesheet" href="/static/admin/admin.css">
+</head>
+<body>
+  <div class="app">
+    <!-- Шапка -->
+    <header class="header">
+      <div class="container header-container">
+        <h1 class="logo">📰 Аналитика новостей</h1>
+        <div class="header-right">
+          <span id="userRole" class="role-badge"></span>
+          <button id="backToMainBtn" class="btn btn-outline">← На главную</button>
+          <button id="logoutBtn" class="btn btn-outline">Выйти</button>
+        </div>
+      </div>
+    </header>
+
+    <div class="container main-container">
+      <h1 class="page-title">Панель администратора</h1>
+      
+      <!-- Блок 1: Выдача прав -->
+      <div class="admin-section card">
+        <h2>Выделить права доступа</h2>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="newLogin">Логин</label>
+            <input type="text" id="newLogin" placeholder="Введите логин">
+          </div>
+          <div class="form-group">
+            <label for="newPassword">Пароль</label>
+            <input type="password" id="newPassword" placeholder="Введите пароль">
+          </div>
+          <button id="addUserBtn" class="btn btn-primary" style="align-self: flex-end;">➕ Добавить</button>
+        </div>
+        <div id="addUserMessage" class="form-message"></div>
+      </div>
+
+      <!-- Блок 2: Статистика посещений -->
+      <div class="admin-section card">
+        <h2>Статистика посещений</h2>
+        
+        <div class="stats-controls">
+          <div class="form-group">
+            <label>Интервал</label>
+            <select id="visitInterval">
+              <option value="day">За день (почасово)</option>
+              <option value="week">За неделю</option>
+              <option value="month">За месяц</option>
+              <option value="custom">Настраиваемый (не более 3 месяцев)</option>
+            </select>
+          </div>
+          
+          <div id="customVisitRange" class="form-group hidden">
+            <label>Диапазон дат (ДД.ММ.ГГГГ ЧЧ:ММ - ДД.ММ.ГГГГ ЧЧ:ММ)</label>
+            <input type="text" id="customVisitDates" placeholder="01.01.2026 00:00 - 31.03.2026 23:59">
+          </div>
+          
+          <div class="form-group">
+            <label>Пользователь</label>
+            <select id="visitUserSelect">
+              <option value="all">Все пользователи</option>
+              <option value="search">🔍 Поиск по логину...</option>
+            </select>
+          </div>
+          
+          <div id="searchUserGroup" class="form-group hidden">
+            <label>Логин пользователя</label>
+            <input type="text" id="searchUserLogin" placeholder="Введите логин">
+          </div>
+          
+          <button id="loadVisitStatsBtn" class="btn btn-primary">Применить</button>
+        </div>
+        
+        <div id="visitStatsResult" class="stats-result">
+          <div class="empty-state">Выберите параметры и нажмите «Применить»</div>
+        </div>
+      </div>
+
+      <!-- Блок 3: Статистика новых пользователей -->
+      <div class="admin-section card">
+        <h2>Статистика новых пользователей</h2>
+        
+        <div class="stats-controls">
+          <div class="form-group">
+            <label>Интервал</label>
+            <select id="newUsersInterval">
+              <option value="day">За день (почасово)</option>
+              <option value="week">За неделю</option>
+              <option value="month">За месяц</option>
+              <option value="custom">Настраиваемый (не более 3 месяцев)</option>
+            </select>
+          </div>
+          
+          <div id="customNewUsersRange" class="form-group hidden">
+            <label>Диапазон дат (ДД.ММ.ГГГГ ЧЧ:ММ - ДД.ММ.ГГГГ ЧЧ:ММ)</label>
+            <input type="text" id="customNewUsersDates" placeholder="01.01.2026 00:00 - 31.03.2026 23:59">
+          </div>
+          
+          <button id="loadNewUsersStatsBtn" class="btn btn-primary">Применить</button>
+        </div>
+        
+        <div id="newUsersStatsResult" class="stats-result">
+          <div class="empty-state">Выберите параметры и нажмите «Применить»</div>
+        </div>
+      </div>
+
+      <!-- Блок 4: Статистика БД -->
+      <div class="admin-section card">
+        <h2>Статистика базы данных</h2>
+        <button id="loadDbStatsBtn" class="btn btn-primary">Загрузить статистику</button>
+        
+        <div id="dbStatsResult" class="stats-result">
+          <div class="empty-state">Нажмите «Загрузить статистику»</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.plot.ly/plotly-2.32.0.min.js"></script>
+  <script src="/static/common/common.js?v=3"></script>
+  <script src="/static/admin/admin.js?v=3"></script>
+</body>
+</html>
