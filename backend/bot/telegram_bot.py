@@ -645,3 +645,10 @@ class TelegramBot:
 
     def stop(self):
         self._running = False
+
+
+# ─── Запуск из командной строки ─────────────────────────────────
+if __name__ == "__main__":
+    import asyncio
+    bot = TelegramBot()
+    asyncio.run(bot.start())

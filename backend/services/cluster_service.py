@@ -416,6 +416,7 @@ class ClusterService:
 
         llm_url = _os.getenv("LLM_URL", "http://localhost:11434/api/chat")
         llm_model = _os.getenv("LLM_MODEL", "gemma4:12b")
+        print(f"[CHRONOLOGY] .env path={_env_path}, exists={_env_path.exists()}")
         print(f"[CHRONOLOGY] URL={llm_url}, model={llm_model}")
 
         # Функция fallback — ручная хронология по датам
@@ -433,7 +434,7 @@ class ClusterService:
             "model": llm_model,
             "messages": [{"role": "user", "content": prompt}],
             "stream": False,
-            "options": {"num_predict": 2048, "temperature": 0.5},
+            "options": {"num_predict": 16392, "temperature": 0.5},
         }
 
         chronology_text = ""
