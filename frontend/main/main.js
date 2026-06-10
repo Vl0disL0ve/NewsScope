@@ -1,14 +1,9 @@
 // main.js — полная версия (ES5-совместимый синтаксис)
 console.log('main.js: ПЕРВАЯ СТРОКА');
 
-// Каналы по умолчанию (разделены по источникам)
+// Пользовательские каналы загружаются с сервера
 var DEFAULT_CHANNELS = [
-  { name: 'ТАСС',        source: 'tg', tg_user: 'tass_agency' },
-  { name: 'РБК',         source: 'tg', tg_user: 'rbc' },
-  { name: 'Пул N3',      source: 'tg', tg_user: 'pool_n3' },
-  { name: 'Lenta.ru',    source: 'lenta' },
-  { name: 'Интерфакс',   source: 'tg', tg_user: 'interfax' },
-  { name: 'Коммерсантъ', source: 'tg', tg_user: 'kommersant' },
+  { name: 'Lenta.ru', source: 'lenta' },
 ];
 
 document.addEventListener('DOMContentLoaded', function () {
@@ -149,24 +144,13 @@ document.addEventListener('DOMContentLoaded', function () {
       if (!data) return;
       var serverChannels = Array.isArray(data) ? data : (data.sources || []);
       if (serverChannels.length > 0) {
-        // Очищаем и пересоздаём список каналов (чтобы избежать дубликатов)
         allChannels = [];
         for (var i = 0; i < serverChannels.length; i++) {
           var name = serverChannels[i];
           var source = name.toLowerCase().indexOf('lenta') !== -1 ? 'lenta' : 'tg';
-          // Ищем tg_user в DEFAULT_CHANNELS (по name или tg_user)
-          var tgUser = '';
-          for (var d = 0; d < DEFAULT_CHANNELS.length; d++) {
-            if (DEFAULT_CHANNELS[d].name === name || DEFAULT_CHANNELS[d].tg_user === name) {
-              tgUser = DEFAULT_CHANNELS[d].tg_user || '';
-              // Если нашли по tg_user — используем красивое имя
-              name = DEFAULT_CHANNELS[d].name;
-              break;
-            }
-          }
-          allChannels.push({ name: name, source: source, tg_user: tgUser });
+          allChannels.push({ name: name, source: source, tg_user: source === 'tg' ? name : '' });
         }
-        // Добавляем Lenta.ru если её нет
+        // Сохраняем Lenta.ru если она была в DEFAULT и не пришла с сервера
         var hasLenta = false;
         for (var j = 0; j < allChannels.length; j++) {
           if (allChannels[j].name === 'Lenta.ru') { hasLenta = true; break; }
@@ -336,11 +320,23 @@ document.addEventListener('DOMContentLoaded', function () {
   generateBtn.addEventListener('click', function () {
     var dateFrom = document.getElementById('dateFrom').value;
     var dateTo   = document.getElementById('dateTo').value;
+    var timeFrom = document.getElementById('timeFrom').value || '00:00';
+    var timeTo   = document.getElementById('timeTo').value || '23:59';
 
     if (!dateFrom || !dateTo) {
       showToast('Выберите период', 'error');
       return;
     }
+
+    // Объединяем дату и время в ISO-формат с таймзоной браузера
+    var tzOffset = -new Date().getTimezoneOffset();
+    var tzSign = tzOffset >= 0 ? '+' : '-';
+    var tzHours = String(Math.floor(Math.abs(tzOffset) / 60)).padStart(2, '0');
+    var tzMins = String(Math.abs(tzOffset) % 60).padStart(2, '0');
+    var tzStr = tzSign + tzHours + ':' + tzMins;
+
+    var dateFromISO = dateFrom + 'T' + timeFrom + ':00' + tzStr;
+    var dateToISO   = dateTo   + 'T' + timeTo   + ':00' + tzStr;
 
     // Собираем выбранные каналы
     var selectedChannels = [];
@@ -359,8 +355,8 @@ document.addEventListener('DOMContentLoaded', function () {
     generateBtn.disabled = true;
 
     var url = '/api/clusters/cluster?k=' + clusterCount
-      + '&date_from=' + encodeURIComponent(dateFrom)
-      + '&date_to=' + encodeURIComponent(dateTo)
+      + '&date_from=' + encodeURIComponent(dateFromISO)
+      + '&date_to=' + encodeURIComponent(dateToISO)
       + '&channels=' + encodeURIComponent(JSON.stringify(selectedChannels));
 
     // Таймер
@@ -389,6 +385,12 @@ document.addEventListener('DOMContentLoaded', function () {
     .then(function (data) {
       currentClusters = data.clusters || [];
       var totalTime = ((Date.now() - startTime) / 1000).toFixed(1);
+
+      // Сохраняем результаты для возврата с других страниц
+      if (currentClusters.length > 0) {
+        localStorage.setItem('lastClusterResults', JSON.stringify(currentClusters));
+      }
+
       resultArea.innerHTML = '<h2>Результаты кластеризации <span style="font-size:14px;font-weight:400;opacity:0.6;">(заняло ' + totalTime + ' сек)</span></h2>';
 
       if (data.warning) {
@@ -462,7 +464,7 @@ document.addEventListener('DOMContentLoaded', function () {
       return;
     }
     listenBtn.disabled = true;
-    listenBtn.textContent = '⏳ Генерация...';
+    listenBtn.textContent = '[Генерация...]';
 
     fetch('/api/clusters/' + currentClusterId + '/tts', {
       method: 'POST',
@@ -502,7 +504,7 @@ document.addEventListener('DOMContentLoaded', function () {
     })
     .finally(function () {
       listenBtn.disabled = false;
-      listenBtn.textContent = '🎧 Сгенерировать аудио';
+      listenBtn.textContent = 'Сгенерировать аудио';
     });
   });
 
@@ -537,7 +539,7 @@ document.addEventListener('DOMContentLoaded', function () {
     })
     .finally(function () {
       btn.disabled = false;
-      btn.textContent = '📈 График кластера';
+      btn.textContent = 'График кластера';
     });
   });
 
@@ -545,9 +547,25 @@ document.addEventListener('DOMContentLoaded', function () {
   allGraphBtn.addEventListener('click', function () {
     var btn = this;
     btn.disabled = true;
-    btn.textContent = '⏳ Построение карты...';
+    btn.textContent = 'Построение карты...';
 
-    fetch('/api/clusters/plot', {
+    // Передаём ID последних кластеров, чтобы показать только их
+    var clusterIdsParam = '';
+    var saved = localStorage.getItem('lastClusterResults');
+    if (saved) {
+      try {
+        var parsed = JSON.parse(saved);
+        var ids = [];
+        for (var i = 0; i < parsed.length; i++) {
+          if (parsed[i].cluster_id) ids.push(parsed[i].cluster_id);
+        }
+        if (ids.length > 0) {
+          clusterIdsParam = '&cluster_ids=' + encodeURIComponent(ids.join(','));
+        }
+      } catch(e) {}
+    }
+
+    fetch('/api/clusters/plot?limit=50' + clusterIdsParam, {
       method: 'POST',
       headers: { 'Authorization': 'Bearer ' + getToken() }
     })
@@ -571,7 +589,7 @@ document.addEventListener('DOMContentLoaded', function () {
     })
     .finally(function () {
       btn.disabled = false;
-      btn.textContent = '🗺️ Карта всех кластеров';
+      btn.textContent = 'Карта всех кластеров';
     });
   });
 
@@ -608,7 +626,8 @@ document.addEventListener('DOMContentLoaded', function () {
                + '<div class="chronology-text" style="background:var(--bg-primary);padding:20px;border-radius:12px;margin-top:16px;white-space:pre-wrap;font-family:monospace;line-height:1.8;">'
                + esc(chronology)
                + '</div>'
-               + '<p style="margin-top:12px;font-size:12px;opacity:0.6;">💾 Сохранено в data/' + getRole() + '/</p>';
+               + '<p style="margin-top:12px;font-size:12px;opacity:0.6;">💾 Сохранено в data/' + getRole() + '/</p>'
+               + '<button id="backToResultsBtn" class="btn btn-outline" style="margin-top:16px;" onclick="window._restoreLastResults()">← Вернуться к результатам</button>';
 
       resultArea.innerHTML = html;
       showToast('Хронология построена', 'success');
@@ -619,13 +638,13 @@ document.addEventListener('DOMContentLoaded', function () {
     })
     .finally(function () {
       btn.disabled = false;
-      btn.textContent = '📅 Хронология';
+      btn.textContent = 'Хронология';
     });
   });
 
   // ─── Отрисовка кластеров ───────────────────────────────────
   function renderClusters(clusters) {
-    var html = '<h2>Результаты кластеризации</h2>';
+    var html = '';
 
     for (var i = 0; i < clusters.length; i++) {
       var cluster = clusters[i];
@@ -652,7 +671,7 @@ document.addEventListener('DOMContentLoaded', function () {
             + '</div>';
     }
 
-    resultArea.innerHTML = html;
+    resultArea.insertAdjacentHTML('beforeend', html);
   }
 
   window._selectCluster = function (el, clusterId, clusterNum) {
@@ -718,9 +737,41 @@ document.addEventListener('DOMContentLoaded', function () {
     document.getElementById('dateFrom').value = weekAgo.toISOString().split('T')[0];
   }
 
+  window._restoreLastResults = function () {
+    try {
+      var saved = localStorage.getItem('lastClusterResults');
+      if (saved) {
+        currentClusters = JSON.parse(saved);
+        currentClusterId = null;
+        currentClusterNum = null;
+        resultArea.innerHTML = '<h2>Результаты кластеризации <span style="font-size:14px;font-weight:400;opacity:0.6;">(сохранённые)</span></h2>';
+        renderClusters(currentClusters);
+        listenBtn.disabled = false;
+        graphBtn.disabled = true;
+        chronologyBtn.disabled = true;
+        showToast('Загружены последние результаты', 'success');
+      } else {
+        showToast('Нет сохранённых результатов', 'error');
+      }
+    } catch (e) {
+      showToast('Ошибка загрузки результатов', 'error');
+    }
+  };
+
   // ─── Инициализация ─────────────────────────────────────────
   loadSavedSettings();
   setDefaultDates();
   renderChannels(allChannels, '');          // сразу показываем каналы
   loadChannelsFromServer();                 // пробуем обновить с сервера
+
+  // Если есть сохранённые результаты — показываем кнопку восстановления
+  var savedResults = localStorage.getItem('lastClusterResults');
+  if (savedResults) {
+    var savedBtn = document.createElement('button');
+    savedBtn.className = 'btn btn-outline btn-block';
+    savedBtn.style.marginTop = '8px';
+    savedBtn.textContent = 'Последние результаты';
+    savedBtn.onclick = window._restoreLastResults;
+    document.querySelector('.sidebar .form-group').appendChild(savedBtn);
+  }
 });

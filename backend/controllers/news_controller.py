@@ -15,7 +15,7 @@ if str(_project_root) not in sys.path:
 from fastapi import APIRouter, HTTPException, Query, Depends
 from backend.services.news_service import NewsService
 from backend.deps import get_current_user
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from datetime import time as dt_time
 
 router = APIRouter(prefix="/api/news", tags=["news"])
@@ -36,11 +36,13 @@ async def list_news(
     dt_from = None
     dt_to = None
     if date_from:
-        dt_from_date = datetime.fromisoformat(date_from).date()
-        dt_from = datetime.combine(dt_from_date, dt_time.min, tzinfo=timezone.utc)
+        dt_from = datetime.fromisoformat(date_from)
+        if dt_from.tzinfo is None:
+            dt_from = dt_from.replace(tzinfo=timezone.utc)
     if date_to:
-        dt_to_date = datetime.fromisoformat(date_to).date()
-        dt_to = datetime.combine(dt_to_date, dt_time.max, tzinfo=timezone.utc)
+        dt_to = datetime.fromisoformat(date_to)
+        if dt_to.tzinfo is None:
+            dt_to = dt_to.replace(tzinfo=timezone.utc)
 
     service = NewsService()
     results = await service.get_news(

@@ -52,6 +52,66 @@ async def list_clusters(
     return {"total": len(clusters), "clusters": clusters}
 
 
+@router.get("/search")
+async def search_clusters(
+    q: str = Query(..., min_length=1, description="Поисковый запрос"),
+    limit: int = Query(10, ge=1, le=50),
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Семантический поиск по кластерам через FRIDA-эмбеддинги.
+    При ошибке ML-модели — fallback на текстовый поиск (ILIKE).
+    """
+    service = ClusterService()
+    try:
+        results = await service.search_clusters_semantic(
+            query=q,
+            user_id=current_user["user_id"],
+            limit=limit,
+        )
+    except Exception as e:
+        # Fallback: текстовый поиск по саммари и темам кластеров
+        from database.init_db import SessionLocal
+        from database.models import Cluster
+        from sqlalchemy import or_
+        async with SessionLocal() as db:
+            stmt = (
+                select(Cluster)
+                .where(Cluster.user_id == current_user["user_id"])
+                .where(
+                    or_(
+                        Cluster.topic.ilike(f"%{q}%"),
+                        Cluster.summary.ilike(f"%{q}%"),
+                        Cluster.cluster_title.ilike(f"%{q}%"),
+                    )
+                )
+                .order_by(Cluster.created_at.desc())
+                .limit(limit)
+            )
+            clusters = (await db.execute(stmt)).scalars().all()
+        results = [
+            {
+                "cluster_id": c.cluster_id,
+                "topic": c.topic,
+                "cluster_title": c.cluster_title or c.topic,
+                "summary": c.summary,
+                "news_sources": c.news_sources,
+                "created_at": c.created_at.isoformat(),
+                "similarity": 0.0,
+            }
+            for c in clusters
+        ]
+
+    # Логируем поиск
+    if results:
+        await service.log_search_action(
+            user_id=current_user["user_id"],
+            cluster_id=results[0]["cluster_id"],
+            query=q,
+        )
+    return {"total": len(results), "clusters": results}
+
+
 @router.get("/{cluster_id}")
 async def get_cluster(
     cluster_id: int,
@@ -224,6 +284,7 @@ async def generate_plot(
 @router.post("/plot")
 async def generate_clusters_plot(
     current_user: dict = Depends(get_current_user),
+    cluster_ids: Optional[str] = Query(None, description="ID кластеров через запятую"),
 ):
     """
     Интерактивный scatter plot всех кластеров пользователя.
@@ -235,9 +296,19 @@ async def generate_clusters_plot(
     from sklearn.decomposition import PCA
 
     service = ClusterService()
-    clusters = await service.get_clusters_by_user(
-        user_id=current_user["user_id"], limit=50
-    )
+
+    if cluster_ids:
+        # Показать только конкретные кластеры
+        ids = [int(x.strip()) for x in cluster_ids.split(",") if x.strip()]
+        clusters = []
+        for cid in ids:
+            detail = await service.get_cluster_detail(cid)
+            if detail and detail.get("user_id") == current_user["user_id"]:
+                clusters.append(detail)
+    else:
+        clusters = await service.get_clusters_by_user(
+            user_id=current_user["user_id"], limit=50
+        )
 
     if not clusters:
         raise HTTPException(status_code=400, detail="Нет кластеров для графика")
@@ -347,66 +418,6 @@ async def generate_clusters_plot(
     return HTMLResponse(content=html)
 
 
-@router.get("/search")
-async def search_clusters(
-    q: str = Query(..., min_length=1, description="Поисковый запрос"),
-    limit: int = Query(10, ge=1, le=50),
-    current_user: dict = Depends(get_current_user),
-):
-    """
-    Семантический поиск по кластерам через FRIDA-эмбеддинги.
-    При ошибке ML-модели — fallback на текстовый поиск (ILIKE).
-    """
-    service = ClusterService()
-    try:
-        results = await service.search_clusters_semantic(
-            query=q,
-            user_id=current_user["user_id"],
-            limit=limit,
-        )
-    except Exception as e:
-        # Fallback: текстовый поиск по саммари и темам кластеров
-        from database.init_db import SessionLocal
-        from database.models import Cluster
-        from sqlalchemy import or_
-        async with SessionLocal() as db:
-            stmt = (
-                select(Cluster)
-                .where(Cluster.user_id == current_user["user_id"])
-                .where(
-                    or_(
-                        Cluster.topic.ilike(f"%{q}%"),
-                        Cluster.summary.ilike(f"%{q}%"),
-                        Cluster.cluster_title.ilike(f"%{q}%"),
-                    )
-                )
-                .order_by(Cluster.created_at.desc())
-                .limit(limit)
-            )
-            clusters = (await db.execute(stmt)).scalars().all()
-        results = [
-            {
-                "cluster_id": c.cluster_id,
-                "topic": c.topic,
-                "cluster_title": c.cluster_title or c.topic,
-                "summary": c.summary,
-                "news_sources": c.news_sources,
-                "created_at": c.created_at.isoformat(),
-                "similarity": 0.0,
-            }
-            for c in clusters
-        ]
-
-    # Логируем поиск
-    if results:
-        await service.log_search_action(
-            user_id=current_user["user_id"],
-            cluster_id=results[0]["cluster_id"],
-            query=q,
-        )
-    return {"total": len(results), "clusters": results}
-
-
 @router.delete("/history")
 async def clear_history(current_user: dict = Depends(get_current_user)):
     """
@@ -477,14 +488,16 @@ async def auto_cluster(
 
     # ─── Авто-парсинг выбранных каналов ──────────────────────
     if date_from:
-        dt_from_date = datetime.fromisoformat(date_from).date()
-        dt_from = datetime.combine(dt_from_date, dt_time.min, tzinfo=timezone.utc)
+        dt_from = datetime.fromisoformat(date_from)
+        if dt_from.tzinfo is None:
+            dt_from = dt_from.replace(tzinfo=timezone.utc)
     else:
         dt_from = None
 
     if date_to:
-        dt_to_date = datetime.fromisoformat(date_to).date()
-        dt_to = datetime.combine(dt_to_date, dt_time.max, tzinfo=timezone.utc)
+        dt_to = datetime.fromisoformat(date_to)
+        if dt_to.tzinfo is None:
+            dt_to = dt_to.replace(tzinfo=timezone.utc)
     else:
         dt_to = None
 
@@ -501,16 +514,18 @@ async def auto_cluster(
         tg_channels = []
         for ch in channel_list:
             ch_name = ch.get("name", "")
-            channel_names.append(ch_name)
             if ch.get("source") == "lenta" or ch_name == "Lenta.ru":
+                channel_names.append("Lenta.ru")
                 try:
                     parser = LentaParser()
                     news = await parser.fetch_news()
                     await parser.save_news(news)
                 except Exception as e:
                     print(f"  ⚠️  Lenta.ru: {e}")
-            elif ch.get("source") == "tg" and ch.get("tg_user"):
-                tg_channels.append(ch["tg_user"])
+            elif ch.get("source") == "tg":
+                tg_user = ch.get("tg_user") or ch.get("name", "")
+                channel_names.append(tg_user.lstrip("@"))
+                tg_channels.append(tg_user)
 
         if tg_channels:
             try:

@@ -25,8 +25,8 @@ EMBEDDING_MODEL_PATH = f"{os.getcwd()}/ml_models/{EMBEDDING_MODEL}"
 LLM_URL = os.getenv("LLM_URL", "http://localhost:11434/api/chat")
 LLM_MODEL = os.getenv("LLM_MODEL", "gemma4:12b")
 DEVICE      = "cuda" if torch.cuda.is_available() else "cpu"
-MAX_SUMMARY_TOKENS = 2048
-LLM_TOTAL_TIMEOUT = 200
+MAX_SUMMARY_TOKENS = 4096
+LLM_TOTAL_TIMEOUT = 300
 LLM_CONNECT_TIMEOUT = 30
 
 SPEAKER_VOICE = "ru-RU-DmitryNeural"

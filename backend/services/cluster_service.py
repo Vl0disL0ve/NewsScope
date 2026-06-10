@@ -22,12 +22,13 @@ class ClusterService:
     """Сервис для работы с кластерами новостей."""
 
     @staticmethod
-    async def find_cluster_by_news(news_ids: set) -> Optional[dict]:
-        """Ищет кластер с точно таким же набором news_ids."""
+    async def find_cluster_by_news(news_ids: set, user_id: Optional[int] = None) -> Optional[dict]:
+        """Ищет кластер с точно таким же набором news_ids.
+        Если указан user_id — проверяет только кластеры этого пользователя."""
         from database.models import NewsCluster
         async with SessionLocal() as db:
-            # Находим все cluster_id, где совпадает количество новостей
             from sqlalchemy import func
+            # Находим все cluster_id, где совпадает количество новостей
             stmt = (
                 select(NewsCluster.cluster_id)
                 .group_by(NewsCluster.cluster_id)
@@ -37,13 +38,19 @@ class ClusterService:
             candidate_ids = [row[0] for row in result]
 
             for cid in candidate_ids:
+                # Проверяем user_id если указан
+                if user_id:
+                    cluster_owner = await db.get(Cluster, cid)
+                    if not cluster_owner or cluster_owner.user_id != user_id:
+                        continue
+
                 existing = await db.execute(
                     select(NewsCluster.news_id).where(NewsCluster.cluster_id == cid)
                 )
                 existing_ids = {row[0] for row in existing}
                 if existing_ids == news_ids:
                     # Нашли — возвращаем данные кластера
-                    cluster = await db.get(Cluster, cid)
+                    cluster = cluster_owner if user_id else await db.get(Cluster, cid)
                     if cluster:
                         return {
                             "cluster_id": cluster.cluster_id,
@@ -70,8 +77,8 @@ class ClusterService:
     ) -> dict:
         """Создаёт новый кластер и привязывает к нему новости.
         Если кластер с таким же набором новостей уже существует — возвращает его."""
-        # Проверяем дубликат
-        existing = await self.find_cluster_by_news(set(news_ids))
+        # Проверяем дубликат (только среди своих кластеров)
+        existing = await self.find_cluster_by_news(set(news_ids), user_id=user_id)
         if existing:
             return existing
 
@@ -398,42 +405,61 @@ class ClusterService:
         )
 
         import aiohttp
-        import backend.config as cfg
+        import json as _json
+        import os as _os
+        from dotenv import load_dotenv as _load_dotenv
+        from pathlib import Path as _Path_root
+
+        # Принудительно загружаем .env из корня проекта
+        _env_path = _Path_root(__file__).resolve().parent.parent.parent / ".env"
+        _load_dotenv(_env_path, override=True)
+
+        llm_url = _os.getenv("LLM_URL", "http://localhost:11434/api/chat")
+        llm_model = _os.getenv("LLM_MODEL", "gemma4:12b")
+        print(f"[CHRONOLOGY] URL={llm_url}, model={llm_model}")
 
         # Функция fallback — ручная хронология по датам
         def _fallback_chronology(items):
-            lines = []
+            header = "[LLM НЕДОСТУПЕН — показываем сырые новости]"
+            lines = [header]
             for n in items[:10]:
                 dt = n.published_at.strftime("%Y-%m-%d %H:%M") if n.published_at else "?"
                 src = n.channel or "?"
                 body = (n.news_body or "")[:120]
-                lines.append(f"{dt} | 🔹 {body} | Источники: {src}")
-            return "\n".join(lines) if lines else "(нет данных)"
+                lines.append(f"{dt} | {body} | {src}")
+            return "\n".join(lines)
 
         payload = {
-            "model": cfg.LLM_MODEL,
+            "model": llm_model,
             "messages": [{"role": "user", "content": prompt}],
             "stream": False,
-            "options": {"num_predict": 1024, "temperature": 0.5},
+            "options": {"num_predict": 2048, "temperature": 0.5},
         }
 
         chronology_text = ""
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.post(
-                    cfg.LLM_URL, json=payload,
-                    timeout=aiohttp.ClientTimeout(total=180, connect=30),
+                    llm_url, json=payload,
+                    timeout=aiohttp.ClientTimeout(total=300, connect=30),
                 ) as resp:
                     if resp.status != 200:
+                        body_preview = await resp.text()
+                        print(f"[CHRONOLOGY WARN] HTTP {resp.status}: {body_preview[:200]}")
                         chronology_text = _fallback_chronology(news_items)
                     else:
                         result = await resp.json()
                         chronology_text = result.get("message", {}).get("content", "").strip()
                         if not chronology_text:
+                            print(f"[CHRONOLOGY WARN] LLM вернул пустой ответ, сырой JSON: {_json.dumps(result, ensure_ascii=False)[:300]}")
                             chronology_text = _fallback_chronology(news_items)
-        except aiohttp.ClientConnectorError:
+                        else:
+                            print(f"[CHRONOLOGY OK] LLM ответил, длина={len(chronology_text)}")
+        except aiohttp.ClientConnectorError as e:
+            print(f"[CHRONOLOGY ERROR] ClientConnectorError: {e}")
             chronology_text = _fallback_chronology(news_items)
-        except Exception:
+        except Exception as e:
+            print(f"[CHRONOLOGY ERROR] {type(e).__name__}: {e}")
             chronology_text = _fallback_chronology(news_items)
 
         # 4. Сохраняем в папку пользователя

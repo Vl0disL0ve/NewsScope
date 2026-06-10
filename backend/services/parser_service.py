@@ -55,7 +55,7 @@ class LentaParser:
 
         news_list = []
 
-        for entry in feed.entries[:50]:
+        for entry in feed.entries[:100]:
             subject = None
             if hasattr(entry, "tags") and entry.tags:
                 subject = entry.tags[0].get("term", None)
@@ -64,33 +64,9 @@ class LentaParser:
             if hasattr(entry, "published_parsed") and entry.published_parsed:
                 published = datetime(*entry.published_parsed[:6], tzinfo=timezone.utc)
 
-            # Lenta.RSS кладёт текст в description, а summary пустой
+            # Lenta.RSS кладёт текст в description
             raw_body = (entry.get("summary") or entry.get("description") or entry.get("title") or "")
             news_body = _clean_html(raw_body)
-
-            # Если текст слишком короткий — пробуем загрузить полную статью
-            if len(news_body) < 100 and entry.get("link"):
-                try:
-                    async with httpx.AsyncClient(timeout=15, follow_redirects=True) as client:
-                        article_resp = await client.get(entry["link"])
-                        if article_resp.status_code == 200:
-                            article_html = article_resp.text
-                            # Извлекаем текст статьи (Lenta использует <div class="b-text"> или <p>)
-                            text_match = re.search(
-                                r'<div[^>]*class="[^"]*b-text[^"]*"[^>]*>(.*?)</div>',
-                                article_html, re.DOTALL
-                            )
-                            if text_match:
-                                news_body = _clean_html(text_match.group(1))
-                            else:
-                                # Fallback: все <p> подряд
-                                paragraphs = re.findall(
-                                    r'<p[^>]*>(.*?)</p>', article_html, re.DOTALL
-                                )
-                                if paragraphs:
-                                    news_body = _clean_html("\n".join(paragraphs))
-                except Exception:
-                    pass  # Оставляем то, что есть из RSS
 
             news_list.append({
                 "published_at": published,

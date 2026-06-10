@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Главная - Аналитика новостей</title>
+  <title>Главная - Дайджест новостей</title>
   <link rel="stylesheet" href="../common/common.css">
   <link rel="stylesheet" href="main.css">
 </head>
@@ -13,7 +13,7 @@
     <!-- Шапка -->
     <header class="header">
       <div class="container header-container">
-        <h1 class="logo">Аналитика новостей</h1>
+        <h1 class="logo">Дайджест новостей</h1>
         <div class="header-right">
           <span id="userRole" class="role-badge"></span>
           <button id="logoutBtn" class="btn btn-outline">Выйти</button>
@@ -46,8 +46,14 @@
 
         <div class="form-group">
           <label>Период для новостей</label>
-          <input type="date" id="dateFrom">
-          <input type="date" id="dateTo" style="margin-top: 8px;">
+          <div style="display:flex;gap:6px;align-items:center;">
+            <input type="date" id="dateFrom" style="width:80%;">
+            <input type="time" id="timeFrom" value="00:00" style="width:120px;flex-shrink:0;">
+          </div>
+          <div style="display:flex;gap:6px;align-items:center;margin-top:4px;">
+            <input type="date" id="dateTo" style="width:80%;">
+            <input type="time" id="timeTo" value="23:59" style="width:120px;flex-shrink:0;">
+          </div>
         </div>
 
         <button id="saveSettingsBtn" class="btn btn-primary btn-block">Сохранить настройки</button>

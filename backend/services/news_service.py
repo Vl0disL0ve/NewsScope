@@ -54,7 +54,7 @@ class NewsService:
             if date_from:
                 stmt = stmt.where(News.published_at >= date_from)
             if date_to:
-                stmt = stmt.where(News.published_at <= date_to)
+                stmt = stmt.where(News.published_at < date_to)
 
             stmt = stmt.offset(skip).limit(limit)
             news_list = (await db.execute(stmt)).scalars().all()
